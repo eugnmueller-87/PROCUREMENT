@@ -1,0 +1,31 @@
+Category,Supplier,Spend_2024_EUR,Spend_2025_EUR,Spend_2026E_EUR,Contract_End,Lead_Time_Days,Single_Source,Risk,Region
+IT Software,SAP SE,850000,920000,980000,2027-06-30,14,No,Low,DACH
+IT Software,Microsoft Deutschland GmbH,620000,680000,720000,2026-12-31,7,No,Low,DACH
+IT Software,Salesforce Inc.,340000,380000,410000,2026-09-30,21,Yes,Medium,US
+IT Hardware,Dell Technologies,280000,310000,290000,2026-03-31,30,No,Low,US
+IT Hardware,Lenovo GmbH,190000,220000,240000,2027-01-31,28,No,Low,APAC
+Cloud Services,Amazon Web Services,520000,680000,780000,2027-12-31,3,Yes,High,US
+Cloud Services,Google Cloud Platform,180000,240000,310000,2026-06-30,3,No,Medium,US
+Cloud Services,Microsoft Azure,290000,350000,420000,2027-06-30,3,No,Medium,US
+Consulting,McKinsey & Company,480000,520000,450000,2026-04-30,14,No,Low,DACH
+Consulting,Accenture GmbH,360000,410000,390000,2027-03-31,10,No,Low,DACH
+Consulting,Boston Consulting Group,220000,180000,150000,2026-08-31,14,No,Low,DACH
+Marketing,WPP Group,310000,340000,360000,2026-11-30,21,No,Low,EU
+Marketing,Publicis Groupe,180000,200000,220000,2027-02-28,14,No,Low,EU
+Marketing,HubSpot Inc.,95000,110000,130000,2026-07-31,7,Yes,Medium,US
+Facilities,ISS Facility Services,420000,440000,460000,2027-09-30,60,Yes,High,DACH
+Facilities,CBRE Group,180000,195000,210000,2026-05-31,45,No,Medium,EU
+Travel,BCD Travel,290000,340000,380000,2027-04-30,5,No,Low,DACH
+Travel,Lufthansa CityLine,150000,170000,190000,2026-10-31,1,No,Low,DACH
+HR Services,Personio SE,120000,140000,160000,2027-08-31,14,Yes,Medium,DACH
+HR Services,Randstad Deutschland,280000,310000,330000,2026-12-31,7,No,Low,DACH
+Logistics,DHL Supply Chain,350000,380000,400000,2027-05-31,3,No,Low,DACH
+Logistics,DB Schenker,220000,250000,270000,2026-09-30,5,No,Low,DACH
+Telecom,Deutsche Telekom AG,180000,185000,190000,2027-12-31,30,Yes,Medium,DACH
+Telecom,Vodafone GmbH,95000,100000,105000,2026-06-30,30,No,Low,EU
+Insurance,Allianz SE,210000,220000,230000,2027-11-30,90,Yes,High,DACH
+Legal,Freshfields Bruckhaus,340000,360000,320000,2026-08-31,7,No,Low,DACH
+Legal,CMS Hasche Sigle,180000,200000,190000,2027-01-31,7,No,Low,DACH
+Office Supplies,Staples Deutschland,85000,82000,78000,2026-04-30,3,No,Low,DACH
+Office Supplies,Lyreco GmbH,62000,58000,55000,2026-11-30,3,No,Low,EU
+Professional Services,Deloitte GmbH,410000,450000,480000,2027-07-31,14,No,Low,DACH
