@@ -1,0 +1,30 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+.env
+*.env
+.env.local
+
+# ── SpendLens cache & exports ─────────────────────────────────────────────────
+vendor_cache.json          # AI classification cache — may contain vendor names
+CFO_Report.xlsx            # Generated exports
+*.xlsx
+*.csv
+
+# ── Python ────────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
