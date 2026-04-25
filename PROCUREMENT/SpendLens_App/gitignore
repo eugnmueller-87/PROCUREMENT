@@ -28,3 +28,8 @@ build/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── Client data — NEVER commit ────────────────────────────────────────────────
+clients/*/spendlens.db
+clients/*/vendor_cache.json
+clients/*/config.json
