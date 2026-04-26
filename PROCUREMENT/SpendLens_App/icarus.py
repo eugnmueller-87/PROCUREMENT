@@ -175,17 +175,6 @@ def init_db():
         )
     """)
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS documents (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            uploaded_at  TEXT NOT NULL,
-            filename     TEXT NOT NULL,
-            content_type TEXT,               -- 'pdf' | 'docx' | 'txt' | 'csv' | 'xlsx'
-            raw_text     TEXT NOT NULL,
-            char_count   INTEGER
-        )
-    """)
-
     conn.commit()
     conn.close()
 
@@ -286,12 +275,13 @@ def get_recent_signals(limit=20):
     return rows
 
 
-# ── Document store ───────────────────────────────────────────────────────────
+# ── Document text extraction (in-memory only — nothing written to disk) ───────
 
 def extract_text(filename: str, content: bytes) -> str:
     """
     Extract plain text from uploaded file bytes.
     Supports PDF (pypdf), DOCX (python-docx), XLSX (pandas), TXT/CSV (utf-8).
+    Documents are kept in memory only and never persisted to disk.
     """
     import io
     ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else "txt"
@@ -322,73 +312,6 @@ def extract_text(filename: str, content: bytes) -> str:
         return df.to_string(index=False)
 
     return content.decode("utf-8", errors="replace")
-
-
-def save_document(filename: str, raw_text: str, content_type: str = "txt") -> int:
-    """Persist an uploaded document; return its new ID."""
-    init_db()
-    conn = sqlite3.connect(ICARUS_DB)
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO documents (uploaded_at, filename, content_type, raw_text, char_count) "
-        "VALUES (?,?,?,?,?)",
-        (datetime.now(timezone.utc).isoformat(), filename, content_type,
-         raw_text, len(raw_text)),
-    )
-    doc_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    print(f"[Icarus] Saved document #{doc_id}: {filename} ({len(raw_text):,} chars)")
-    return doc_id
-
-
-def get_documents(limit: int = 20) -> list:
-    """Return metadata for recently uploaded documents (no raw_text)."""
-    init_db()
-    conn = sqlite3.connect(ICARUS_DB)
-    c = conn.cursor()
-    c.execute(
-        "SELECT id, uploaded_at, filename, content_type, char_count "
-        "FROM documents ORDER BY uploaded_at DESC LIMIT ?",
-        (limit,),
-    )
-    cols = ["id", "uploaded_at", "filename", "content_type", "char_count"]
-    rows = [dict(zip(cols, row)) for row in c.fetchall()]
-    conn.close()
-    return rows
-
-
-def get_document_texts(limit: int = 5, chars_per_doc: int = 4000) -> list:
-    """
-    Return a list of formatted document excerpts ready to embed in a prompt.
-    Each entry: '[filename]\n<text excerpt>'
-    """
-    init_db()
-    conn = sqlite3.connect(ICARUS_DB)
-    c = conn.cursor()
-    c.execute(
-        "SELECT filename, raw_text FROM documents ORDER BY uploaded_at DESC LIMIT ?",
-        (limit,),
-    )
-    rows = c.fetchall()
-    conn.close()
-    result = []
-    for filename, raw_text in rows:
-        excerpt = raw_text[:chars_per_doc]
-        if len(raw_text) > chars_per_doc:
-            excerpt += f"\n[… truncated — {len(raw_text):,} chars total]"
-        result.append(f"[{filename}]\n{excerpt}")
-    return result
-
-
-def delete_document(doc_id: int):
-    """Delete a document from the store by ID."""
-    conn = sqlite3.connect(ICARUS_DB)
-    c = conn.cursor()
-    c.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
-    conn.commit()
-    conn.close()
-    print(f"[Icarus] Deleted document #{doc_id}")
 
 
 # ── Scraping ──────────────────────────────────────────────────────────────────
