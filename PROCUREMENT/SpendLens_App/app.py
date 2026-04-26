@@ -249,8 +249,10 @@ def build_year_meta(yr_idx: int) -> pd.DataFrame:
     for c in CATEGORIES_RAW:
         spend_yr   = c["spend"][yr_idx]
         spend_prev = c["spend"][prev_idx]
-        # Budget scales proportionally from the 2026 budget target
-        budget_yr  = round(c["budget"] * spend_yr / c["spend"][4]) if c["spend"][4] else c["budget"]
+        # Budget is set at prior-year spend + 10% growth assumption.
+        # Early years often over-run (fast growth); later years get tighter.
+        growth_assumption = [0.30, 0.25, 0.20, 0.12, 0.08][yr_idx]
+        budget_yr = round(spend_prev * (1 + growth_assumption)) if spend_prev else spend_yr
         rows.append({
             "category":               c["name"],
             "spend_2026e":            spend_yr,      # reused as "current year spend" across all charts
@@ -727,11 +729,15 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     if df_c is not None: df_contracts = df_c
     if year_val is None: year_val = year_select.value
 
-    # Filter by year
+    # ds_trend = full timeline up to selected year (for Spend Evolution area chart)
+    # ds       = single-year slice (for capex/opex and other per-year charts)
     if year_val != "All years":
-        ds = df_spend[df_spend["year"] == int(year_val)].copy()
+        yr_filter = int(year_val)
+        ds_trend  = df_spend[df_spend["year"] <= yr_filter].copy()
+        ds        = df_spend[df_spend["year"] == yr_filter].copy()
     else:
-        ds = df_spend.copy()
+        ds_trend = df_spend.copy()
+        ds       = df_spend.copy()
 
     # ── Resolve year and build year-specific data ──
     if year_val != "All years":
@@ -778,7 +784,7 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_s1.extend([
         section_header("📊 Spend Overview"),
         pn.Row(
-            pn.pane.Plotly(chart_spend_stacked(ds),                    sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_spend_stacked(ds_trend),              sizing_mode="stretch_width"),
             pn.pane.Plotly(chart_category_bars(dm, year_label),        sizing_mode="stretch_width"),
         ),
     ])
