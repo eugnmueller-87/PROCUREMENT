@@ -962,9 +962,9 @@ class IcarusPanel(param.Parameterized):
         )
         send_btn.on_click(lambda e: self.run(query=query_input.value))
 
-        # Three icons grouped flush together with 4 px gap (≈2 mm)
+        # Order: → send | 🎤 mic | 📎 file
         icon_cluster = pn.Row(
-            self._file_input, voice_pane, send_btn,
+            send_btn, voice_pane, self._file_input,
             align="center",
             styles={"gap": "4px", "flex-shrink": "0"},
         )
@@ -979,7 +979,7 @@ class IcarusPanel(param.Parameterized):
 
         # ── Compact quick-action pills ─────────────────────────────────────────
         scan_pill = pn.widgets.Button(
-            name="🔍 Scan",
+            name="🔍 Scan internet for information",
             button_type="light",
             stylesheets=["""
                 .bk-btn{height:24px;padding:0 10px;border-radius:99px;font-size:11px;
