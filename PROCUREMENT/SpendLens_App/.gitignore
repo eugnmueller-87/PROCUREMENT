@@ -1,35 +1,68 @@
-# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+# ── Secrets — NEVER commit ────────────────────────────────────────────────────
 .env
 *.env
 .env.local
+.env.*
 
-# ── SpendLens cache & exports ─────────────────────────────────────────────────
+# ── Client data — NEVER commit ────────────────────────────────────────────────
+clients/
+# (entire clients/ tree: databases, configs, uploaded files, AI memory)
+
+# ── SpendLens runtime artefacts ───────────────────────────────────────────────
 vendor_cache.json          # AI classification cache — may contain vendor names
-CFO_Report.xlsx            # Generated exports
+CFO_Report.xlsx            # Generated exports — never source-controlled
 *.xlsx
-*.csv
+*.db
+*.sqlite
+*.sqlite3
 
 # ── Python ────────────────────────────────────────────────────────────────────
 .venv/
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.pyw
 .Python
 *.egg-info/
 dist/
 build/
+*.egg
+.eggs/
+pip-wheel-metadata/
+*.whl
 
 # ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
-*/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+# Old development notebooks (archived, not part of the app)
+spendlens_panel_tool.ipynb
+spendlens_v2.ipynb
+spendlens_v3.ipynb
+spendlens_v4.ipynb
+
+# ── IDE & editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.claude/
+# (.claude/ contains local session state and tool settings)
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
 
-# ── Client data — NEVER commit ────────────────────────────────────────────────
-clients/*/spendlens.db
-clients/*/vendor_cache.json
-clients/*/config.json
+# ── Logs & temp ───────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+*.orig
+tmp/
+temp/
