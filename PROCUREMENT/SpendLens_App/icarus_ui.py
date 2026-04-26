@@ -648,7 +648,7 @@ class IcarusPanel(param.Parameterized):
         # In-memory document store — cleared automatically on every page refresh
         self._docs       = []   # list of {id, filename, text, char_count, uploaded_at}
         self._next_doc_id = 0
-        self._doc_list   = pn.Column(sizing_mode="stretch_width")
+        self._doc_list   = pn.pane.HTML("", sizing_mode="stretch_width")
         self._doc_status = pn.pane.HTML(
             "", sizing_mode="stretch_width", visible=False,
             styles={"padding": "0 18px"},
@@ -815,41 +815,27 @@ class IcarusPanel(param.Parameterized):
     # ── Document helpers ──────────────────────────────────────────────────────
 
     def _refresh_doc_list(self):
-        """Rebuild the document list from in-memory _docs."""
-        self._doc_list.clear()
+        """Re-render the document list as HTML (always triggers a UI update)."""
         if not self._docs:
-            self._doc_list.append(
-                pn.pane.HTML(f'{_CSS}<div class="doc-empty">No documents uploaded yet.</div>',
-                             sizing_mode="stretch_width")
+            self._doc_list.object = (
+                f'{_CSS}<div class="doc-empty">No documents uploaded yet.</div>'
             )
             return
+        rows = ""
         for doc in self._docs:
             ext  = doc["filename"].lower().rsplit(".", 1)[-1].upper() if "." in doc["filename"] else "FILE"
             icon = {"PDF": "📄", "DOCX": "📝", "TXT": "📃",
                     "CSV": "📊", "XLSX": "📊"}.get(ext, "📎")
             kc   = f"{doc['char_count']:,}"
             date = _fmt_date(doc.get("uploaded_at", ""))
-            del_btn = pn.widgets.Button(
-                name="×", width=28, height=28,
-                button_type="light",
-                stylesheets=[".bk-btn{padding:0;font-size:14px;color:#aaa;"
-                              "border:none;background:none;cursor:pointer;}"
-                              ".bk-btn:hover{color:#E24B4A;}"],
+            rows += (
+                f'<div class="doc-item">'
+                f'<span class="doc-icon">{icon}</span>'
+                f'<span class="doc-name" title="{doc["filename"]}">{doc["filename"]}</span>'
+                f'<span class="doc-meta">{kc} chars &middot; {date}</span>'
+                f'</div>'
             )
-            del_btn.on_click(lambda e, did=doc["id"], fn=doc["filename"]:
-                             self._delete_doc(did, fn))
-            self._doc_list.append(pn.Row(
-                pn.pane.HTML(
-                    f'{_CSS}<div class="doc-item">'
-                    f'<span class="doc-icon">{icon}</span>'
-                    f'<span class="doc-name" title="{doc["filename"]}">{doc["filename"]}</span>'
-                    f'<span class="doc-meta">{kc} chars &middot; {date}</span>'
-                    f'</div>',
-                    sizing_mode="stretch_width",
-                ),
-                del_btn,
-                align="center", sizing_mode="stretch_width",
-            ))
+        self._doc_list.object = f'{_CSS}{rows}'
 
     def _upload_docs(self):
         """Handle FileInput upload — extract text into in-memory store."""
@@ -878,9 +864,10 @@ class IcarusPanel(param.Parameterized):
                 print(f"[IcarusPanel] upload error: {e}")
 
         if uploaded:
+            names = ", ".join(uploaded)
             self._doc_status.object = (
                 f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:2px 0 4px;">'
-                f'✓ Added — Icarus will use this in your next query</div>'
+                f'✓ {names} — Icarus will use this in your next query</div>'
             )
             self._doc_status.visible = True
         if errors:
