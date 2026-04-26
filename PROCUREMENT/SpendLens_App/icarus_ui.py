@@ -877,19 +877,18 @@ class IcarusPanel(param.Parameterized):
                 errors.append(f"{filename}: {e}")
                 print(f"[IcarusPanel] upload error: {e}")
 
-        n = len(self._docs)
         if uploaded:
             self._doc_status.object = (
-                f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:4px 0;">'
-                f'📎 {n} doc{"s" if n != 1 else ""} ready — Icarus will use '
-                f'{"them" if n != 1 else "it"} in your next query</div>'
+                f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:2px 0 4px;">'
+                f'✓ Added — Icarus will use this in your next query</div>'
             )
+            self._doc_status.visible = True
         if errors:
-            self._doc_status.object += (
-                f'<div style="font-size:11px;color:#E24B4A;padding:2px 0;">'
+            self._doc_status.object = (
+                f'{_CSS}<div style="font-size:11px;color:#E24B4A;padding:2px 0;">'
                 f'⚠ Could not read: {"; ".join(errors)}</div>'
             )
-        self._doc_status.visible = True
+            self._doc_status.visible = True
         self._file_input.value    = None
         self._file_input.filename = None
 
@@ -1019,13 +1018,28 @@ class IcarusPanel(param.Parameterized):
                     "border-bottom": "1px solid #f0f0f0", "gap": "8px"},
         )
 
+        doc_section = pn.Column(
+            pn.pane.HTML(
+                f'{_CSS}<div class="doc-section-title">📎 Documents'
+                '<span style="font-size:10px;font-weight:400;color:#aaa;margin-left:6px;">'
+                'Cleared on page refresh &middot; used as context in every query'
+                '</span></div>',
+                sizing_mode="stretch_width",
+            ),
+            self._doc_status,
+            self._doc_list,
+            sizing_mode="stretch_width",
+            styles={"padding": "8px 18px 12px", "background": "#fafcff",
+                    "border-bottom": "1px solid #f0f0f0"},
+        )
+
         enter_key = pn.pane.HTML(_ENTER_KEY_HTML, height=0, margin=0)
 
         return pn.Column(
             self._header_pane,
             input_row,
             action_row,
-            self._doc_status,
+            doc_section,
             enter_key,
             self._result_pane,
             self._cards_pane,
