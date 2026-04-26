@@ -50,7 +50,8 @@ spendlens_v4.ipynb
 *.swo
 *~
 .claude/
-# (.claude/ contains local session state and tool settings)
+CLAUDE.md
+# (.claude/ and CLAUDE.md contain local AI session state and tool guidance)
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
