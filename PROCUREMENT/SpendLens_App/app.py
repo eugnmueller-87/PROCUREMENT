@@ -366,7 +366,7 @@ def build_year_meta(yr_idx: int) -> pd.DataFrame:
             "region":                 c["region"],
             "po_coverage_pct":        round(c["po_coverage_pct"]       * PO_SCALE[yr_idx]),
             "contract_coverage_pct":  round(c["contract_coverage_pct"] * CC_SCALE[yr_idx]),
-            "cagr":                   round(((c["spend"][4] / c["spend"][0]) ** (1/4) - 1) * 100, 1),
+            "cagr":                   round(((c["spend"][yr_idx] / c["spend"][0]) ** (1 / max(yr_idx, 1)) - 1) * 100, 1) if yr_idx > 0 else 0.0,
         })
     return pd.DataFrame(rows)
 
@@ -602,33 +602,108 @@ def chart_treemap(df_meta):
     return fig
 
 
-def chart_cagr(df_meta):
+def chart_cagr(df_meta, year_label="2026E"):
     df = df_meta.sort_values("cagr", ascending=True)
     colors = [GREEN if v < 20 else YELLOW if v < 40 else RED for v in df["cagr"]]
+    label = "YoY Growth" if year_label == "2023" else f"CAGR 2022→{year_label}"
     fig = go.Figure(go.Bar(
         y=df["category"], x=df["cagr"], orientation="h",
         marker_color=colors,
         text=[f"{v:.1f}%" for v in df["cagr"]],
         textposition="outside",
     ))
-    fig.update_layout(title="Category CAGR 2022→2026E",
-                      **LAYOUT, height=420, xaxis_title="CAGR %")
+    fig.update_layout(title=f"Category {label}",
+                      **LAYOUT, height=420, xaxis_title=f"{label} %")
     return fig
 
 
-def chart_capex_opex(df_spend, df_meta):
-    merged = df_spend[df_spend["year"] == 2026].merge(
-        df_meta[["category", "capex_opex"]], on="category", how="left")
-    summary = merged.groupby("capex_opex")["spend"].sum().reset_index()
-    fig = go.Figure(go.Pie(
-        labels=summary["capex_opex"], values=summary["spend"],
-        marker_colors=[NAVY, GREEN],
-        textinfo="label+percent+value",
-        hovertemplate="%{label}: €%{value:,.0f}K<extra></extra>",
+
+def build_spend_delta_chart(start_yr: int, end_yr: int):
+    si = YEARS.index(start_yr)
+    ei = YEARS.index(end_yr)
+    if ei < si:
+        si, ei = ei, si
+        start_yr, end_yr = end_yr, start_yr
+
+    # Base year — show absolute spend with 0% growth label
+    if start_yr == end_yr:
+        rows = [{"category": c["name"], "spend": c["spend"][si]} for c in CATEGORIES_RAW]
+        df = pd.DataFrame(rows).sort_values("spend", ascending=True)
+        fig = go.Figure(go.Bar(
+            y=df["category"], x=df["spend"], orientation="h",
+            marker_color=GREEN,
+            text=[f"€{v:,.0f}K  (0% — base year)" for v in df["spend"]],
+            textposition="outside",
+        ))
+        fig.update_layout(
+            title=f"Baseline spend {start_yr}  (0% growth — comparison start)",
+            **LAYOUT, height=420,
+            xaxis_title="Spend (€K)",
+            xaxis_range=[0, df["spend"].max() * 1.55],
+        )
+        return fig
+
+    rows = []
+    for c in CATEGORIES_RAW:
+        s0, s1 = c["spend"][si], c["spend"][ei]
+        delta = s1 - s0
+        pct   = round((s1 / s0 - 1) * 100, 1) if s0 else 0.0
+        rows.append({"category": c["name"], "delta": delta, "pct": pct, "s0": s0, "s1": s1})
+
+    df = pd.DataFrame(rows).sort_values("delta", ascending=True)
+    fig = go.Figure()
+    # Base: from-year spend (dark navy)
+    fig.add_trace(go.Bar(
+        name=str(start_yr), y=df["category"], x=df["s0"],
+        orientation="h", marker_color=NAVY,
+        hovertemplate="<b>%{y}</b><br>" + str(start_yr) + ": €%{x:,.0f}K<extra></extra>",
     ))
-    fig.update_layout(title="Capex vs Opex Split 2026E",
-                      paper_bgcolor=BG, font=dict(color=TEXT, family="Georgia,serif"),
-                      height=380)
+    # Growth: delta on top (light blue), label shows increase
+    fig.add_trace(go.Bar(
+        name=f"Growth → {end_yr}", y=df["category"], x=df["delta"],
+        orientation="h", marker_color="#5B9BD5",
+        text=[f"+€{d:,.0f}K ({p:+.0f}%)" for d, p in zip(df["delta"], df["pct"])],
+        textposition="outside",
+        hovertemplate="<b>%{y}</b><br>Growth: +€%{x:,.0f}K<extra></extra>",
+    ))
+    x_max = (df["s0"] + df["delta"]).max()
+    fig.update_layout(
+        title=f"Spend by category  {start_yr} → {end_yr}",
+        **LAYOUT, height=420, barmode="stack",
+        xaxis_title="Spend (€K)",
+        xaxis_range=[0, x_max * 1.45],
+        legend_orientation="h", legend_y=1.08, legend_x=0,
+        showlegend=True,
+    )
+    return fig
+
+
+def chart_capex_opex(*_):
+    # Stacked bar: Capex and Opex spend per year across the full timeline
+    capex_by_year = []
+    opex_by_year  = []
+    for yr_i in range(len(YEARS)):
+        capex = sum(c["spend"][yr_i] for c in CATEGORIES_RAW if c["capex_opex"] == "Capex")
+        opex  = sum(c["spend"][yr_i] for c in CATEGORIES_RAW if c["capex_opex"] == "Opex")
+        capex_by_year.append(capex)
+        opex_by_year.append(opex)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name="Opex",  x=YEARS, y=opex_by_year,  marker_color=GREEN,
+                         text=[f"€{v:,.0f}K" for v in opex_by_year],
+                         textposition="inside",
+                         hovertemplate="Opex %{x}: €%{y:,.0f}K<extra></extra>"))
+    fig.add_trace(go.Bar(name="Capex", x=YEARS, y=capex_by_year, marker_color=NAVY,
+                         text=[f"€{v:,.0f}K" for v in capex_by_year],
+                         textposition="inside",
+                         hovertemplate="Capex %{x}: €%{y:,.0f}K<extra></extra>"))
+    fig.update_layout(
+        title="Capex vs Opex spend per year",
+        **LAYOUT, height=420, barmode="stack",
+        xaxis_tickvals=YEARS,
+        xaxis_ticktext=[str(y) for y in YEARS],
+        yaxis_title="Spend (€K)",
+        legend_orientation="h", legend_y=1.08, legend_x=0,
+    )
     return fig
 
 
@@ -856,6 +931,9 @@ chart_s3     = pn.Column(sizing_mode="stretch_width")
 chart_s4     = pn.Column(sizing_mode="stretch_width")
 chart_deep      = pn.Column(sizing_mode="stretch_width")
 drill_panel     = pn.Column(sizing_mode="stretch_width")
+cagr_start      = pn.widgets.Select(name="From", options=YEARS, value=2022, width=100)
+cagr_end        = pn.widgets.Select(name="To",   options=YEARS, value=2026, width=100)
+cagr_pane       = pn.pane.Plotly(sizing_mode="stretch_width")
 treemap_pane      = pn.pane.Plotly(sizing_mode="stretch_width")
 supplier_detail   = pn.pane.HTML("", sizing_mode="stretch_width")
 supplier_news     = pn.pane.HTML("", sizing_mode="stretch_width")
@@ -885,14 +963,11 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     if year_val is None: year_val = year_select.value
 
     # ds_trend = full timeline up to selected year (for Spend Evolution area chart)
-    # ds       = single-year slice (for capex/opex and other per-year charts)
     if year_val != "All years":
         yr_filter = int(year_val)
         ds_trend  = df_spend[df_spend["year"] <= yr_filter].copy()
-        ds        = df_spend[df_spend["year"] == yr_filter].copy()
     else:
         ds_trend = df_spend.copy()
-        ds       = df_spend.copy()
 
     # ── Resolve year and build year-specific data ──
     if year_val != "All years":
@@ -983,11 +1058,21 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_deep.extend([
         section_header("🔬 Deep Dive Analysis"),
         pn.Row(
-            pn.pane.Plotly(chart_cagr(dm),             sizing_mode="stretch_width"),
-            pn.pane.Plotly(chart_capex_opex(ds, dm),   sizing_mode="stretch_width"),
+            pn.Column(
+                pn.pane.HTML("<b style='font-size:12px;color:#1B2A4A'>Compare period</b>",
+                             margin=(16, 0, 8, 0)),
+                cagr_start,
+                cagr_end,
+                width=130,
+                margin=(0, 12, 0, 0),
+            ),
+            cagr_pane,
+            pn.pane.Plotly(chart_capex_opex(), sizing_mode="stretch_width"),
+            sizing_mode="stretch_width",
         ),
         treemap_frame,
     ])
+    cagr_pane.object   = build_spend_delta_chart(cagr_start.value, cagr_end.value)
     treemap_pane.object = chart_treemap(dm)
     treemap_frame.objects = [treemap_pane]
 
@@ -1243,24 +1328,61 @@ def _on_fetch_signals(_):
     sup_name = _current_supplier[0]
     if not sup_name:
         return
-    fetch_signals_btn.name      = "⏳ Scanning…"
-    fetch_signals_btn.disabled  = True
+    fetch_signals_btn.name     = "⏳ Fetching RSS feeds…"
+    fetch_signals_btn.disabled = True
 
     def _run():
         try:
             import icarus as _icarus
-            _icarus.run(client_name=sup_name)
-        except Exception:
-            pass
-        signals = _get_supplier_signals(sup_name)
-        supplier_news.object        = _render_news_html(signals, sup_name)
-        fetch_signals_btn.name      = "🔍 Fetch latest signals"
-        fetch_signals_btn.disabled  = False
+            all_categories = [c["name"] for c in CATEGORIES_RAW]
+            articles = _icarus.fetch_articles(all_categories)
+            sup_lower = sup_name.lower()
+            matches = [
+                a for a in articles
+                if sup_lower in a.get("headline", "").lower()
+                or sup_lower in a.get("summary", "").lower()
+            ]
+            if matches:
+                # Convert raw articles to signal-shaped dicts for _render_news_html
+                signals = [{
+                    "headline":  a["headline"],
+                    "source":    a["source"],
+                    "published": (a.get("published") or "")[:10],
+                    "relevance": 7,
+                    "impact":    "neutral",
+                    "action":    None,
+                    "url":       a.get("url", "#"),
+                } for a in matches[:5]]
+                supplier_news.object = _render_news_html(signals, sup_name)
+            else:
+                supplier_news.object = f"""
+                <div style="margin-top:8px;padding:12px 16px;background:#F8F9FA;
+                            border:1px solid #DEE2E6;border-radius:8px;font-family:Georgia,serif">
+                  <div style="font-size:11px;color:#6c757d;text-transform:uppercase;
+                              letter-spacing:.05em;margin-bottom:4px">📡 Market Intelligence</div>
+                  <div style="font-size:13px;color:#6c757d">
+                    No articles mentioning <strong>{sup_name}</strong> in current RSS feeds.
+                    Try again later or run a full Icarus scan from the Icarus tab.
+                  </div>
+                </div>"""
+        except Exception as exc:
+            supplier_news.object = f"""
+            <div style="margin-top:8px;padding:12px 16px;background:#FDF2F2;
+                        border:1px solid #F5C6CB;border-radius:8px;font-family:Georgia,serif">
+              <div style="font-size:12px;color:#C0392B">⚠ RSS fetch error: {exc}</div>
+            </div>"""
+        fetch_signals_btn.name     = "🔍 Fetch latest signals"
+        fetch_signals_btn.disabled = False
 
     threading.Thread(target=_run, daemon=True).start()
 
 
 fetch_signals_btn.on_click(_on_fetch_signals)
+def _update_cagr(*_):
+    cagr_pane.object = build_spend_delta_chart(cagr_start.value, cagr_end.value)
+
+cagr_start.param.watch(_update_cagr, "value")
+cagr_end.param.watch(_update_cagr, "value")
 treemap_back.on_click(lambda _: _show_treemap())
 treemap_pane.param.watch(_on_treemap_click, "click_data")
 
