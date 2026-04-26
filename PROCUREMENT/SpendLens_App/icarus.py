@@ -194,10 +194,19 @@ def save_query(categories, article_count, signal_count):
 
 
 def save_signals(query_id, signals):
-    """Persist signals from a query run."""
+    """Persist signals from a query run, skipping any URL already stored today."""
     conn = sqlite3.connect(ICARUS_DB)
     c = conn.cursor()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for s in signals:
+        url = s.get("url") or ""
+        if url:
+            c.execute(
+                "SELECT 1 FROM signals WHERE url = ? AND timestamp LIKE ? LIMIT 1",
+                (url, f"{today}%"),
+            )
+            if c.fetchone():
+                continue  # already stored today — skip
         c.execute("""
             INSERT INTO signals
             (query_id, timestamp, published, source, headline, summary,
@@ -272,7 +281,23 @@ def get_recent_signals(limit=20):
             "relevance","impact","action","url","feedback"]
     rows = [dict(zip(cols, row)) for row in c.fetchall()]
     conn.close()
-    return rows
+    # Dedup in-Python so stale DB duplicates never reach the UI
+    seen_urls: set = set()
+    seen_heads: set = set()
+    unique: list = []
+    for row in rows:
+        url  = (row.get("url") or "").strip()
+        head = (row.get("headline") or "").strip().lower()
+        if url and url in seen_urls:
+            continue
+        if head and head in seen_heads:
+            continue
+        if url:
+            seen_urls.add(url)
+        if head:
+            seen_heads.add(head)
+        unique.append(row)
+    return unique
 
 
 # ── Document text extraction (in-memory only — nothing written to disk) ───────
