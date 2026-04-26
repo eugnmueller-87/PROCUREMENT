@@ -153,6 +153,14 @@ CATEGORIES_RAW = [
      "po_coverage_pct": 40, "contract_coverage_pct": 50},
 ]
 
+# Per-year scaling factors (index 0=2022 … 4=2026)
+# Simulate procurement maturity growing over time
+PO_SCALE     = [0.58, 0.67, 0.74, 0.86, 1.00]  # PO coverage improving
+CC_SCALE     = [0.52, 0.63, 0.72, 0.85, 1.00]  # Contract coverage improving
+MAVERICK_PCT = [24,   20,   17,   14,   12]     # Maverick spend shrinking
+SPM_PCT      = [38,   46,   53,   60,   65]     # Spend under management growing
+EBITDA_SCALE = [0.10, 0.22, 0.42, 0.70, 1.00]  # EBITDA impact compounding
+
 EBITDA_DATA = [
     {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 420, "Status": "Realised"},
     {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 280, "Status": "Realised"},
@@ -602,10 +610,31 @@ df_spend, df_meta, df_ebitda, df_contracts = build_default_data()
 year_select   = pn.widgets.Select(
     name="Year", options=["All years"] + [str(y) for y in YEARS],
     value="All years", width=240)
-file_input    = pn.widgets.FileInput(accept=".csv,.xlsx,.xls", name="Upload spend data")
+file_input    = pn.widgets.FileInput(
+    accept=".csv,.xlsx,.xls", name="", width=240,
+    stylesheets=["""
+        :host { width:240px !important; }
+        .bk-input-group {
+            position:relative; width:240px; height:38px; border-radius:6px;
+            background:#1B3A6B; border:none; display:flex; align-items:center;
+            justify-content:center; cursor:pointer; transition:background 0.15s;
+        }
+        .bk-input-group:hover { background:#2E5BA8; }
+        .bk-input-group::before {
+            content:"📂  Upload Spend Data"; color:white; font-size:13px;
+            font-family:Georgia,serif; font-weight:600;
+            pointer-events:none; position:absolute;
+        }
+        input[type="file"] {
+            position:absolute; opacity:0; width:100%; height:100%;
+            cursor:pointer; z-index:1;
+        }
+        .bk-input-container { display:none !important; }
+    """],
+)
 dataset_label = pn.pane.Markdown("",
                                   styles={"color": NAVY, "font-size": "13px"})
-export_btn    = pn.widgets.Button(name="📥 Export CFO Report",
+export_btn    = pn.widgets.Button(name="📥 Report",
                                    button_type="primary", width=240)
 icarus_btn    = pn.widgets.Button(name="🪶 Run Icarus Scan",
                                    button_type="success", width=240)
@@ -646,19 +675,31 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
         ds = df_spend.copy()
 
     dm = df_meta.copy()
-    total     = dm["spend_2026e"].sum()
-    prev      = dm["spend_2025"].sum()
-    yoy       = round((total - prev) / prev * 100, 1) if prev > 0 else 0
-    ebitda    = df_ebitda["Impact €K"].sum()
-    po_avg    = round(dm["po_coverage_pct"].mean())
-    cc_avg    = round(dm["contract_coverage_pct"].mean())
-    maverick  = 12
-    spm_pct   = 60
+
+    # Resolve year index (0=2022 … 4=2026) for per-year scaling
+    if year_val != "All years":
+        yr      = int(year_val)
+        yr_idx  = YEARS.index(yr) if yr in YEARS else 4
+        prev_yr = YEARS[yr_idx - 1] if yr_idx > 0 else None
+        total   = df_spend[df_spend["year"] == yr]["spend"].sum()
+        prev    = df_spend[df_spend["year"] == prev_yr]["spend"].sum() if prev_yr else 0
+    else:
+        yr_idx  = 4          # "All years" uses 2026 as reference
+        total   = dm["spend_2026e"].sum()
+        prev    = dm["spend_2025"].sum()
+
+    yoy      = round((total - prev) / prev * 100, 1) if prev > 0 else 0
+    ebitda   = round(df_ebitda["Impact €K"].sum() * EBITDA_SCALE[yr_idx])
+    po_avg   = round(dm["po_coverage_pct"].mean() * PO_SCALE[yr_idx])
+    cc_avg   = round(dm["contract_coverage_pct"].mean() * CC_SCALE[yr_idx])
+    maverick = MAVERICK_PCT[yr_idx]
+    spm_pct  = SPM_PCT[yr_idx]
 
     # ── KPI Cards ──
+    spend_label = str(year_val) if year_val != "All years" else "All years"
     kpi_row.clear()
     kpi_row.extend([
-        kpi_card("Total Spend",       f"€{total/1000:.1f}M",   year_val),
+        kpi_card("Total Spend",       f"€{total/1000:.1f}M",   spend_label),
         kpi_card("YoY Growth",        f"+{yoy:.0f}%",           "vs prior year",
                  RED if yoy > 30 else YELLOW if yoy > 15 else GREEN),
         kpi_card("EBITDA Impact",     f"€{ebitda:,}K",          "savings + avoidance",
