@@ -967,6 +967,18 @@ template = pn.template.FastListTemplate(
     header_background=NAVY,
     background_color=BG,
     theme="default",
+    theme_toggle=False,
+    raw_css=["""
+        /* Hide Panel header toolbar icons (settings, notifications, user) */
+        .pn-header-design-provider,
+        #header-design-provider,
+        .pn-header-design-provider > *,
+        fast-design-system-provider > fast-button,
+        .bk-toolbar.bk-above,
+        .title-bar > span:not(.title) {
+            display: none !important;
+        }
+    """],
 )
 
 template.servable()
