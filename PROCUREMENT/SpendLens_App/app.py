@@ -97,59 +97,62 @@ YEARS = [2022, 2023, 2024, 2025, 2026]
 
 CATEGORIES_RAW = [
     {"name": "Cloud & Compute",       "spend": [4200, 7800, 12500, 17800, 24000],
-     "budget": 22000, "concentration": 72, "risk": "Critical", "single_source": True,
-     "suppliers": "AWS, Google Cloud, Azure", "lead_time_days": 0,
-     "contract_end": "2026-09", "capex_opex": "Opex", "region": "US",
+     "budget": 22000, "risk": "Critical", "single_source": True,
+     "suppliers": "AWS, Google Cloud, Azure, OVH, Hetzner", "supplier_count": 5,
+     "lead_time_days": 0, "contract_end": "2026-09", "capex_opex": "Opex", "region": "US",
      "po_coverage_pct": 95, "contract_coverage_pct": 90},
     {"name": "AI/ML APIs & Data",     "spend": [800, 2200, 4800, 6500, 9200],
-     "budget": 8500, "concentration": 55, "risk": "High", "single_source": False,
-     "suppliers": "OpenAI, Anthropic, Scale AI", "lead_time_days": 14,
-     "contract_end": "2026-06", "capex_opex": "Opex", "region": "US",
+     "budget": 8500, "risk": "High", "single_source": False,
+     "suppliers": "OpenAI, Anthropic, Scale AI, Cohere, Mistral, Replicate", "supplier_count": 6,
+     "lead_time_days": 14, "contract_end": "2026-06", "capex_opex": "Opex", "region": "US",
      "po_coverage_pct": 80, "contract_coverage_pct": 75},
     {"name": "IT Software & SaaS",    "spend": [900, 1400, 2200, 3100, 4200],
-     "budget": 4000, "concentration": 22, "risk": "Low", "single_source": False,
-     "suppliers": "GitHub, Datadog, Atlassian", "lead_time_days": 7,
+     "budget": 4000, "risk": "Low", "single_source": False,
+     "suppliers": "GitHub, Datadog, Atlassian, Slack, Notion, Linear, Figma, Snyk, Vercel, Sentry, 1Password, Mixpanel",
+     "supplier_count": 12, "lead_time_days": 7,
      "contract_end": "Various", "capex_opex": "Opex", "region": "Global",
      "po_coverage_pct": 85, "contract_coverage_pct": 88},
     {"name": "Telecom & Voice",       "spend": [400, 800, 1400, 2200, 3000],
-     "budget": 2800, "concentration": 65, "risk": "Critical", "single_source": True,
-     "suppliers": "Twilio, Vonage, DT", "lead_time_days": 30,
-     "contract_end": "2026-07", "capex_opex": "Opex", "region": "US",
+     "budget": 2800, "risk": "Critical", "single_source": True,
+     "suppliers": "Twilio, Vonage, Deutsche Telekom, Bandwidth", "supplier_count": 4,
+     "lead_time_days": 30, "contract_end": "2026-07", "capex_opex": "Opex", "region": "US",
      "po_coverage_pct": 92, "contract_coverage_pct": 95},
     {"name": "Recruitment & HR",      "spend": [600, 1100, 2400, 4200, 6800],
-     "budget": 6500, "concentration": 35, "risk": "High", "single_source": False,
-     "suppliers": "Personio, LinkedIn, Agencies", "lead_time_days": 45,
+     "budget": 6500, "risk": "High", "single_source": False,
+     "suppliers": "Personio, LinkedIn, Stepstone, Xing, Hays, Michael Page, Kienbaum, boutique agencies",
+     "supplier_count": 8, "lead_time_days": 45,
      "contract_end": "2026-12", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 60, "contract_coverage_pct": 70},
     {"name": "Professional Services", "spend": [400, 700, 1200, 2100, 3200],
-     "budget": 3000, "concentration": 40, "risk": "Medium", "single_source": False,
-     "suppliers": "Big 4, Baker McKenzie", "lead_time_days": 21,
-     "contract_end": "2026-03", "capex_opex": "Opex", "region": "DACH",
+     "budget": 3000, "risk": "Medium", "single_source": False,
+     "suppliers": "Deloitte, Baker McKenzie, KPMG, local law firm, advisor", "supplier_count": 5,
+     "lead_time_days": 21, "contract_end": "2026-03", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 55, "contract_coverage_pct": 65},
     {"name": "Marketing & Campaigns", "spend": [300, 800, 1800, 3500, 5500],
-     "budget": 5000, "concentration": 28, "risk": "Medium", "single_source": False,
-     "suppliers": "Event Agencies, Google Ads", "lead_time_days": 30,
+     "budget": 5000, "risk": "Medium", "single_source": False,
+     "suppliers": "Google Ads, Meta, LinkedIn Ads, event agency A, event agency B, PR firm, creative agency",
+     "supplier_count": 7, "lead_time_days": 30,
      "contract_end": "Various", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 45, "contract_coverage_pct": 55},
     {"name": "Facilities & Office",   "spend": [500, 900, 1500, 2800, 4800],
-     "budget": 4500, "concentration": 45, "risk": "High", "single_source": False,
-     "suppliers": "ISS, Lyreco, Catering", "lead_time_days": 90,
-     "contract_end": "2028-06", "capex_opex": "Opex", "region": "DACH",
+     "budget": 4500, "risk": "High", "single_source": False,
+     "suppliers": "ISS, Lyreco, catering provider, cleaning service, security, maintenance", "supplier_count": 6,
+     "lead_time_days": 90, "contract_end": "2028-06", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 70, "contract_coverage_pct": 80},
     {"name": "Real Estate",           "spend": [1200, 1800, 2400, 3200, 4200],
-     "budget": 4000, "concentration": 80, "risk": "High", "single_source": True,
-     "suppliers": "WeWork, Office Landlords", "lead_time_days": 180,
-     "contract_end": "2028-12", "capex_opex": "Opex", "region": "DACH",
+     "budget": 4000, "risk": "High", "single_source": True,
+     "suppliers": "WeWork Berlin, WeWork Munich, external landlord", "supplier_count": 3,
+     "lead_time_days": 180, "contract_end": "2028-12", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 100, "contract_coverage_pct": 100},
     {"name": "Hardware & Equipment",  "spend": [300, 500, 900, 1500, 2400],
-     "budget": 2200, "concentration": 38, "risk": "Medium", "single_source": False,
-     "suppliers": "Apple, Dell, NVIDIA", "lead_time_days": 56,
-     "contract_end": "N/A", "capex_opex": "Capex", "region": "DACH",
+     "budget": 2200, "risk": "Medium", "single_source": False,
+     "suppliers": "Apple, Dell, NVIDIA, Lenovo", "supplier_count": 4,
+     "lead_time_days": 56, "contract_end": "N/A", "capex_opex": "Capex", "region": "DACH",
      "po_coverage_pct": 90, "contract_coverage_pct": 60},
     {"name": "Travel & Expenses",     "spend": [200, 500, 1100, 2000, 3200],
-     "budget": 3000, "concentration": 30, "risk": "Low", "single_source": False,
-     "suppliers": "Lufthansa, Navan, Hotels", "lead_time_days": 3,
-     "contract_end": "2026-09", "capex_opex": "Opex", "region": "DACH",
+     "budget": 3000, "risk": "Low", "single_source": False,
+     "suppliers": "Lufthansa, Deutsche Bahn, Navan, Marriott, Hilton, Sixt, Airbnb, IHG", "supplier_count": 8,
+     "lead_time_days": 3, "contract_end": "2026-09", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 40, "contract_coverage_pct": 50},
 ]
 
@@ -160,6 +163,8 @@ CC_SCALE     = [0.52, 0.63, 0.72, 0.85, 1.00]  # Contract coverage improving
 MAVERICK_PCT = [24,   20,   17,   14,   12]     # Maverick spend shrinking
 SPM_PCT      = [38,   46,   53,   60,   65]     # Spend under management growing
 EBITDA_SCALE = [0.10, 0.22, 0.42, 0.70, 1.00]  # EBITDA impact compounding
+# Lead times improve as supplier relationships and processes mature
+LEAD_SCALE   = [1.70, 1.40, 1.20, 1.08, 1.00]  # 2022 slowest, 2026 most efficient
 
 EBITDA_BY_YEAR = {
     2022: [
@@ -219,16 +224,18 @@ def build_default_data():
         for i, year in enumerate(YEARS):
             spend_rows.append({"category": cat["name"], "year": year, "spend": cat["spend"][i]})
 
+    total_spend_2026 = sum(c["spend"][4] for c in CATEGORIES_RAW)
     meta_rows = [{
         "category":             c["name"],
         "spend_2026e":          c["spend"][4],
         "spend_2025":           c["spend"][3],
         "budget_2026e":         c["budget"],
         "budget_variance":      c["spend"][4] - c["budget"],
-        "concentration":        c["concentration"],
+        "concentration":        round(c["spend"][4] / total_spend_2026 * 100, 1),
         "risk":                 c["risk"],
         "single_source":        c["single_source"],
         "suppliers":            c["suppliers"],
+        "supplier_count":       c["supplier_count"],
         "lead_time_days":       c["lead_time_days"],
         "contract_end":         c["contract_end"],
         "capex_opex":           c["capex_opex"],
@@ -244,26 +251,31 @@ def build_default_data():
 
 def build_year_meta(yr_idx: int) -> pd.DataFrame:
     """Build df_meta with spend values for the given year index (0=2022…4=2026)."""
-    prev_idx = max(0, yr_idx - 1)
+    prev_idx    = max(0, yr_idx - 1)
+    total_spend = sum(c["spend"][yr_idx] for c in CATEGORIES_RAW)
     rows = []
     for c in CATEGORIES_RAW:
         spend_yr   = c["spend"][yr_idx]
         spend_prev = c["spend"][prev_idx]
-        # Budget is set at prior-year spend + 10% growth assumption.
-        # Early years often over-run (fast growth); later years get tighter.
         growth_assumption = [0.30, 0.25, 0.20, 0.12, 0.08][yr_idx]
         budget_yr = round(spend_prev * (1 + growth_assumption)) if spend_prev else spend_yr
+        # Concentration = this category's share of total company spend (%)
+        # Changes naturally each year as spend mix shifts
+        concentration = round(spend_yr / total_spend * 100, 1)
+        # Supplier count grows ~25%/year; work backwards from 2026 base
+        supplier_count = max(1, round(c["supplier_count"] / (1.25 ** (4 - yr_idx))))
         rows.append({
             "category":               c["name"],
-            "spend_2026e":            spend_yr,      # reused as "current year spend" across all charts
+            "spend_2026e":            spend_yr,
             "spend_2025":             spend_prev,
             "budget_2026e":           budget_yr,
             "budget_variance":        spend_yr - budget_yr,
-            "concentration":          c["concentration"],
+            "concentration":          concentration,
             "risk":                   c["risk"],
             "single_source":          c["single_source"],
             "suppliers":              c["suppliers"],
-            "lead_time_days":         c["lead_time_days"],
+            "supplier_count":         supplier_count,
+            "lead_time_days":         round(c["lead_time_days"] * LEAD_SCALE[yr_idx]),
             "contract_end":           c["contract_end"],
             "capex_opex":             c["capex_opex"],
             "region":                 c["region"],
@@ -390,36 +402,40 @@ def chart_category_bars(df_meta, year_label="2026E"):
 def chart_risk_bubble(df_meta):
     fig = go.Figure()
     for _, row in df_meta.iterrows():
+        n = int(row.get("supplier_count", 3))
         fig.add_trace(go.Scatter(
             x=[row["concentration"]], y=[row["spend_2026e"]],
             mode="markers+text",
-            marker=dict(size=max(row["lead_time_days"] * 0.3 + 18, 18),
+            marker=dict(size=max(n * 9, 18),
                         color=RISK_COLORS.get(row["risk"], DIM), opacity=0.75,
                         line=dict(color=WHITE, width=2)),
             text=[row["category"][:16]],
             textposition="top center",
             textfont=dict(size=9, color=TEXT),
             name=row["category"],
-            customdata=[[row["category"], row["risk"], row["lead_time_days"],
-                         row.get("suppliers", "")]],
+            customdata=[[row["category"], row["risk"], n,
+                         row.get("suppliers", ""), row["concentration"]]],
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
                 "Risk: %{customdata[1]}<br>"
-                "Concentration: %{x}%%<br>"
+                "Share of total spend: %{customdata[4]}%%<br>"
                 "Spend: €%{y:,.0f}K<br>"
-                "Lead Time: %{customdata[2]}d<extra></extra>"
+                "Suppliers (%{customdata[2]}): %{customdata[3]}<extra></extra>"
             ),
         ))
-    fig.add_shape(type="rect", x0=50, x1=100, y0=0, y1=df_meta["spend_2026e"].max() * 1.1,
+    # High-concentration zone: category absorbs >20% of total company spend
+    x_max = df_meta["concentration"].max() * 1.15
+    y_max = df_meta["spend_2026e"].max() * 1.1
+    fig.add_shape(type="rect", x0=20, x1=x_max, y0=0, y1=y_max,
                   fillcolor="rgba(192,57,43,0.05)",
                   line=dict(color="rgba(192,57,43,0.3)", dash="dot"))
-    fig.add_annotation(x=75, y=df_meta["spend_2026e"].max() * 1.0,
-                       text="⚠ HIGH RISK ZONE", showarrow=False,
+    fig.add_annotation(x=(20 + x_max) / 2, y=y_max * 0.97,
+                       text="⚠ HIGH CONCENTRATION ZONE", showarrow=False,
                        font=dict(size=11, color=RED))
     fig.update_layout(
-        title="Risk Map — Concentration vs Spend (bubble size = lead time)",
+        title="Risk Map — Category Share of Total Spend (bubble size = no. of suppliers)",
         **LAYOUT, height=500, showlegend=False,
-        xaxis_title="Supplier Concentration (%)",
+        xaxis_title="Category Spend as % of Total Company Spend",
         yaxis_title="Spend (€K)",
     )
     return fig
