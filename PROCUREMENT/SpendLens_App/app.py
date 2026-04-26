@@ -161,14 +161,43 @@ MAVERICK_PCT = [24,   20,   17,   14,   12]     # Maverick spend shrinking
 SPM_PCT      = [38,   46,   53,   60,   65]     # Spend under management growing
 EBITDA_SCALE = [0.10, 0.22, 0.42, 0.70, 1.00]  # EBITDA impact compounding
 
-EBITDA_DATA = [
-    {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 420, "Status": "Realised"},
-    {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 280, "Status": "Realised"},
-    {"Initiative": "Recruitment Agency Rebid",   "Type": "Savings",        "Impact €K": 350, "Status": "In Progress"},
-    {"Initiative": "Telco Contract Renewal",     "Type": "Savings",        "Impact €K": 180, "Status": "Planned"},
-    {"Initiative": "AWS Reserved Instances",     "Type": "Cost Avoidance", "Impact €K": 400, "Status": "Realised"},
-    {"Initiative": "Hardware Bulk Purchase",     "Type": "Cost Avoidance", "Impact €K": 320, "Status": "In Progress"},
-]
+EBITDA_BY_YEAR = {
+    2022: [
+        {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 42,  "Status": "Planned"},
+        {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 28,  "Status": "Planned"},
+        {"Initiative": "AWS Reserved Instances",     "Type": "Cost Avoidance", "Impact €K": 40,  "Status": "Planned"},
+    ],
+    2023: [
+        {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 130, "Status": "In Progress"},
+        {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 85,  "Status": "Realised"},
+        {"Initiative": "AWS Reserved Instances",     "Type": "Cost Avoidance", "Impact €K": 120, "Status": "Realised"},
+        {"Initiative": "Hardware Bulk Purchase",     "Type": "Cost Avoidance", "Impact €K": 75,  "Status": "Planned"},
+    ],
+    2024: [
+        {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 210, "Status": "Realised"},
+        {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 150, "Status": "Realised"},
+        {"Initiative": "Recruitment Agency Rebid",   "Type": "Savings",        "Impact €K": 145, "Status": "In Progress"},
+        {"Initiative": "AWS Reserved Instances",     "Type": "Cost Avoidance", "Impact €K": 200, "Status": "Realised"},
+        {"Initiative": "Hardware Bulk Purchase",     "Type": "Cost Avoidance", "Impact €K": 110, "Status": "In Progress"},
+    ],
+    2025: [
+        {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 330, "Status": "Realised"},
+        {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 230, "Status": "Realised"},
+        {"Initiative": "Recruitment Agency Rebid",   "Type": "Savings",        "Impact €K": 280, "Status": "Realised"},
+        {"Initiative": "Telco Contract Renewal",     "Type": "Savings",        "Impact €K": 100, "Status": "In Progress"},
+        {"Initiative": "AWS Reserved Instances",     "Type": "Cost Avoidance", "Impact €K": 320, "Status": "Realised"},
+        {"Initiative": "Hardware Bulk Purchase",     "Type": "Cost Avoidance", "Impact €K": 220, "Status": "In Progress"},
+    ],
+    2026: [
+        {"Initiative": "Cloud Cost Optimisation",    "Type": "Savings",        "Impact €K": 420, "Status": "Realised"},
+        {"Initiative": "SaaS License Consolidation", "Type": "Savings",        "Impact €K": 280, "Status": "Realised"},
+        {"Initiative": "Recruitment Agency Rebid",   "Type": "Savings",        "Impact €K": 350, "Status": "In Progress"},
+        {"Initiative": "Telco Contract Renewal",     "Type": "Savings",        "Impact €K": 180, "Status": "Planned"},
+        {"Initiative": "AWS Reserved Instances",     "Type": "Cost Avoidance", "Impact €K": 400, "Status": "Realised"},
+        {"Initiative": "Hardware Bulk Purchase",     "Type": "Cost Avoidance", "Impact €K": 320, "Status": "In Progress"},
+    ],
+}
+EBITDA_DATA = EBITDA_BY_YEAR[2026]  # default for initial load
 
 CONTRACTS_DATA = [
     {"Category": "AI/ML APIs & Data",     "Supplier": "OpenAI",          "Value €K": 2800, "Expiry": "2026-06-30", "Risk": "High"},
@@ -211,6 +240,36 @@ def build_default_data():
 
     return pd.DataFrame(spend_rows), pd.DataFrame(meta_rows), \
            pd.DataFrame(EBITDA_DATA), pd.DataFrame(CONTRACTS_DATA)
+
+
+def build_year_meta(yr_idx: int) -> pd.DataFrame:
+    """Build df_meta with spend values for the given year index (0=2022…4=2026)."""
+    prev_idx = max(0, yr_idx - 1)
+    rows = []
+    for c in CATEGORIES_RAW:
+        spend_yr   = c["spend"][yr_idx]
+        spend_prev = c["spend"][prev_idx]
+        # Budget scales proportionally from the 2026 budget target
+        budget_yr  = round(c["budget"] * spend_yr / c["spend"][4]) if c["spend"][4] else c["budget"]
+        rows.append({
+            "category":               c["name"],
+            "spend_2026e":            spend_yr,      # reused as "current year spend" across all charts
+            "spend_2025":             spend_prev,
+            "budget_2026e":           budget_yr,
+            "budget_variance":        spend_yr - budget_yr,
+            "concentration":          c["concentration"],
+            "risk":                   c["risk"],
+            "single_source":          c["single_source"],
+            "suppliers":              c["suppliers"],
+            "lead_time_days":         c["lead_time_days"],
+            "contract_end":           c["contract_end"],
+            "capex_opex":             c["capex_opex"],
+            "region":                 c["region"],
+            "po_coverage_pct":        round(c["po_coverage_pct"]       * PO_SCALE[yr_idx]),
+            "contract_coverage_pct":  round(c["contract_coverage_pct"] * CC_SCALE[yr_idx]),
+            "cagr":                   round(((c["spend"][4] / c["spend"][0]) ** (1/4) - 1) * 100, 1),
+        })
+    return pd.DataFrame(rows)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -298,7 +357,7 @@ def chart_spend_stacked(df_spend):
     return fig
 
 
-def chart_category_bars(df_meta):
+def chart_category_bars(df_meta, year_label="2026E"):
     df = df_meta.sort_values("spend_2026e", ascending=True).copy()
     over = df["budget_variance"] > 0
     colors = [RED if o else NAVY for o in over]
@@ -310,7 +369,7 @@ def chart_category_bars(df_meta):
         customdata=df["budget_variance"],
         hovertemplate="<b>%{y}</b><br>Spend: €%{x:,.0f}K<br>Variance: €%{customdata:,.0f}K<extra></extra>",
     ))
-    fig.update_layout(title="2026E Spend vs Budget (red = over budget)",
+    fig.update_layout(title=f"{year_label} Spend vs Budget (red = over budget)",
                       **LAYOUT, height=420, xaxis_title="Spend (€K)")
     return fig
 
@@ -348,7 +407,7 @@ def chart_risk_bubble(df_meta):
         title="Risk Map — Concentration vs Spend (bubble size = lead time)",
         **LAYOUT, height=500, showlegend=False,
         xaxis_title="Supplier Concentration (%)",
-        yaxis_title="2026E Spend (€K)",
+        yaxis_title="Spend (€K)",
     )
     return fig
 
@@ -674,24 +733,28 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     else:
         ds = df_spend.copy()
 
-    dm = df_meta.copy()
-
-    # Resolve year index (0=2022 … 4=2026) for per-year scaling
+    # ── Resolve year and build year-specific data ──
     if year_val != "All years":
         yr      = int(year_val)
         yr_idx  = YEARS.index(yr) if yr in YEARS else 4
         prev_yr = YEARS[yr_idx - 1] if yr_idx > 0 else None
         total   = df_spend[df_spend["year"] == yr]["spend"].sum()
         prev    = df_spend[df_spend["year"] == prev_yr]["spend"].sum() if prev_yr else 0
+        dm      = build_year_meta(yr_idx)
+        ebitda_yr = pd.DataFrame(EBITDA_BY_YEAR.get(yr, EBITDA_BY_YEAR[2026]))
+        year_label = str(yr)
     else:
-        yr_idx  = 4          # "All years" uses 2026 as reference
-        total   = dm["spend_2026e"].sum()
-        prev    = dm["spend_2025"].sum()
+        yr_idx    = 4
+        total     = df_meta["spend_2026e"].sum()
+        prev      = df_meta["spend_2025"].sum()
+        dm        = df_meta.copy()
+        ebitda_yr = pd.DataFrame(EBITDA_BY_YEAR[2026])
+        year_label = "All years"
 
     yoy      = round((total - prev) / prev * 100, 1) if prev > 0 else 0
-    ebitda   = round(df_ebitda["Impact €K"].sum() * EBITDA_SCALE[yr_idx])
-    po_avg   = round(dm["po_coverage_pct"].mean() * PO_SCALE[yr_idx])
-    cc_avg   = round(dm["contract_coverage_pct"].mean() * CC_SCALE[yr_idx])
+    ebitda   = ebitda_yr["Impact €K"].sum()
+    po_avg   = round(dm["po_coverage_pct"].mean())
+    cc_avg   = round(dm["contract_coverage_pct"].mean())
     maverick = MAVERICK_PCT[yr_idx]
     spm_pct  = SPM_PCT[yr_idx]
 
@@ -715,8 +778,8 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_s1.extend([
         section_header("📊 Spend Overview"),
         pn.Row(
-            pn.pane.Plotly(chart_spend_stacked(ds), sizing_mode="stretch_width"),
-            pn.pane.Plotly(chart_category_bars(dm), sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_spend_stacked(ds),                    sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_category_bars(dm, year_label),        sizing_mode="stretch_width"),
         ),
     ])
 
@@ -748,10 +811,10 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_s4.extend([
         section_header("💶 EBITDA Impact"),
         pn.Row(
-            pn.pane.Plotly(chart_ebitda_waterfall(df_ebitda), sizing_mode="stretch_width"),
-            pn.pane.Plotly(chart_category_bars(dm),           sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_ebitda_waterfall(ebitda_yr),          sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_category_bars(dm, year_label),        sizing_mode="stretch_width"),
         ),
-        render_ebitda_table(df_ebitda),
+        render_ebitda_table(ebitda_yr),
     ])
 
     # ── Deep Dive ──
@@ -765,11 +828,12 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
         pn.pane.Plotly(chart_treemap(dm), sizing_mode="stretch_width"),
     ])
 
-    # ── Data preview ──
+    # ── Data preview — rename column to show the actual year ──
     if "category" in dm.columns:
-        cols = [c for c in ["category", "spend_2026e", "risk", "concentration",
-                            "contract_end", "po_coverage_pct"] if c in dm.columns]
-        data_preview.value = dm[cols]
+        display_cols = [c for c in ["category", "spend_2026e", "risk", "concentration",
+                                    "contract_end", "po_coverage_pct"] if c in dm.columns]
+        display_dm = dm[display_cols].rename(columns={"spend_2026e": f"spend_{year_label} (€K)"})
+        data_preview.value = display_dm
 
 
 def update_from_uploaded(flagged_df: pd.DataFrame, filename: str):
