@@ -60,6 +60,9 @@ desktop.ini
 ehthumbs.db
 $RECYCLE.BIN/
 
+# ── Session handover files ────────────────────────────────────────────────────
+handover/
+
 # ── Logs & temp ───────────────────────────────────────────────────────────────
 *.log
 *.tmp
