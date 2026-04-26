@@ -14,6 +14,59 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ── JSON helper ───────────────────────────────────────────────────────────────
+
+def _parse_json(raw: str):
+    """
+    Robustly extract and parse the first well-formed JSON object from a string.
+    Uses balanced-brace scanning to avoid greedy-regex issues where Claude
+    prefixes the JSON with a prose sentence containing {}.
+    """
+    import re as _re
+    # Strip markdown code fences
+    raw = _re.sub(r'^```\w*\s*', '', raw.strip(), flags=_re.MULTILINE)
+    raw = _re.sub(r'\s*```\s*$', '', raw, flags=_re.MULTILINE).strip()
+
+    # Find the start of the first JSON object or array
+    start = -1
+    opener, closer = None, None
+    for i, ch in enumerate(raw):
+        if ch == '{':
+            start, opener, closer = i, '{', '}'
+            break
+        if ch == '[':
+            start, opener, closer = i, '[', ']'
+            break
+    if start == -1:
+        raise ValueError("No JSON object/array found in response")
+
+    # Walk forward counting depth to find the matching close
+    depth = 0
+    in_str = False
+    escape = False
+    for i, ch in enumerate(raw[start:], start):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_str:
+            escape = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch == opener:
+            depth += 1
+        elif ch == closer:
+            depth -= 1
+            if depth == 0:
+                candidate = raw[start:i + 1]
+                return json.loads(candidate)
+
+    raise ValueError("Unbalanced braces — could not extract JSON")
+
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 ICARUS_DB = "clients/default/icarus_memory.db"
@@ -349,42 +402,29 @@ def query_with_claude(query: str, client_categories: list, client_name: str = "C
     ctx = "\n".join(
         f"- [{s['category']}] {s['headline']} → {s.get('action','')}"
         for s in recent
-    ) if recent else "Keine gespeicherten Signale."
+    ) if recent else "No stored signals yet."
 
-    # Fresh scan for relevant articles
+    # Fresh headlines for context
     articles = fetch_articles(client_categories)
     art_text = "\n".join(
         f"- {a['headline']} ({a['source']}, {a.get('published','')[:10]})"
         for a in articles[:25]
     )
 
-    prompt = f"""Du bist Icarus, ein Procurement-Intelligence-Agent für SpendLens.
-
-Client: {client_name}
-Spend-Kategorien: {', '.join(client_categories)}
-
-Frage des Nutzers: {query}
-
-Gespeicherte Signale (Kontext):
-{ctx}
-
-Aktuelle Schlagzeilen:
-{art_text}
-
-Beantworte die Frage in 3–5 Sätzen mit konkreten Handlungsempfehlungen für das Procurement-Team.
-Gib dann die 3–5 relevantesten Signale zurück.
-
-Antworte NUR mit JSON (kein Markdown):
-{{
-  "answer": "...",
-  "signals": [
-    {{
-      "headline": "...", "category": "...", "relevance": 8,
-      "impact": "negative", "action": "...", "source": "...",
-      "url": "...", "published": "YYYY-MM-DD", "summary": "..."
-    }}
-  ]
-}}"""
+    prompt = (
+        f"You are Icarus, a procurement intelligence agent for SpendLens.\n\n"
+        f"Client: {client_name}\n"
+        f"Spend categories: {', '.join(client_categories)}\n\n"
+        f"User question: {query}\n\n"
+        f"Stored signals (context):\n{ctx}\n\n"
+        f"Recent headlines:\n{art_text}\n\n"
+        "Answer the question in 3-5 sentences with concrete recommendations for the procurement team. "
+        "Then return the 3-5 most relevant signals.\n\n"
+        "Return ONLY valid JSON, no markdown, no extra text:\n"
+        '{"answer": "...", "signals": [{"headline": "...", "category": "...", '
+        '"relevance": 8, "impact": "negative", "action": "...", "source": "...", '
+        '"url": "...", "published": "YYYY-MM-DD", "summary": "..."}]}'
+    )
 
     try:
         resp = client_api.messages.create(
@@ -393,17 +433,9 @@ Antworte NUR mit JSON (kein Markdown):
             messages=[{"role": "user", "content": prompt}]
         )
         raw = resp.content[0].text.strip()
-        # strip markdown fences
-        import re as _re
-        raw = _re.sub(r'^```\w*\s*', '', raw)
-        raw = _re.sub(r'\s*```$', '', raw).strip()
-        # extract outermost JSON object robustly
-        m = _re.search(r'\{[\s\S]*\}', raw)
-        if m:
-            raw = m.group()
-        return json.loads(raw)
+        return _parse_json(raw)
     except Exception as e:
-        print(f"[Icarus] query_with_claude error: {e}")
+        print(f"[Icarus] query_with_claude error: {type(e).__name__}: {e}")
         return {"answer": "Analysis error – please try again.", "signals": []}
 
 
@@ -415,7 +447,6 @@ def weekly_summary(client_categories: list, client_name: str = "Client") -> dict
     Returns a dict with week, headline, top_risks, top_opportunities, actions,
     category_highlights, signals.
     """
-    import re as _re
     from datetime import timedelta
     init_db()
     client_api = Anthropic()
@@ -477,20 +508,16 @@ Return ONLY valid JSON (no markdown, no extra text):
             messages=[{"role": "user", "content": prompt}]
         )
         raw = resp.content[0].text.strip()
-        raw = _re.sub(r'^```\w*\s*', '', raw)
-        raw = _re.sub(r'\s*```$', '', raw).strip()
-        m = _re.search(r'\{[\s\S]*\}', raw)
-        if m:
-            raw = m.group()
-        data = json.loads(raw)
+        print(f"[Icarus] weekly_summary raw ({len(raw)} chars): {raw[:300]}")
+        data = _parse_json(raw)
         if not data.get("signals"):
             data["signals"] = [{"headline": s["headline"], "category": s["category"],
                                  "impact": s["impact"], "action": s["action"]}
                                 for s in week_signals[:5]]
         return data
     except Exception as e:
-        print(f"[Icarus] weekly_summary error: {e}")
-        return {"week": week_label, "headline": f"Summary generation failed – please try again.",
+        print(f"[Icarus] weekly_summary error: {type(e).__name__}: {e}")
+        return {"week": week_label, "headline": "Summary generation failed – please try again.",
                 "top_risks": [], "top_opportunities": [], "actions": [],
                 "category_highlights": {}, "signals": week_signals[:5]}
 
@@ -504,7 +531,6 @@ def generate_rfp_brief(query: str, client_categories: list, client_name: str = "
     Returns dict with title, executive_summary, market_context, negotiation_levers,
     key_requirements, risk_areas, suggested_terms, next_steps.
     """
-    import re as _re
     init_db()
     client_api = Anthropic()
 
@@ -542,14 +568,10 @@ Return ONLY valid JSON (no markdown, no extra text):
             messages=[{"role": "user", "content": prompt}]
         )
         raw = resp.content[0].text.strip()
-        raw = _re.sub(r'^```\w*\s*', '', raw)
-        raw = _re.sub(r'\s*```$', '', raw).strip()
-        m = _re.search(r'\{[\s\S]*\}', raw)
-        if m:
-            raw = m.group()
-        return json.loads(raw)
+        print(f"[Icarus] generate_rfp_brief raw ({len(raw)} chars): {raw[:300]}")
+        return _parse_json(raw)
     except Exception as e:
-        print(f"[Icarus] generate_rfp_brief error: {e}")
+        print(f"[Icarus] generate_rfp_brief error: {type(e).__name__}: {e}")
         return {"title": "RFP Brief", "executive_summary": "Generation failed – please try again.",
                 "market_context": [], "negotiation_levers": [], "key_requirements": [],
                 "risk_areas": [], "suggested_terms": [], "next_steps": []}

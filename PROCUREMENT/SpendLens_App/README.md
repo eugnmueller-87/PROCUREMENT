@@ -101,15 +101,39 @@ SpendLens never overwrites previous data. Every upload appends to a transaction 
 
 ---
 
-## Phase 2 — Market Intelligence Agent *(in development)*
+## Icarus — Market Intelligence Agent
 
-The next layer answers the question procurement teams can never answer today: *is this price increase actually justified?*
+SpendLens ships with Icarus, a live market intelligence layer that answers the question procurement teams can never answer today: *is this price increase actually justified?*
 
-The agent monitors public indices and news sources — commodity prices, energy markets, semiconductor supply, currency movements, geopolitical developments — and maps them to the categories in your spend data.
+Icarus monitors RSS feeds from Reuters, The Register, Handelsblatt, DatacenterDynamics, Spend Matters, and specialised procurement sources. It maps news signals to the categories in your spend data and tells you what to do about them — before the invoice arrives.
+
+**What Icarus does:**
+
+- **On-demand RSS scan** — Fetches and deduplicates articles across 9 curated sources, scores each for procurement relevance (1–10), classifies impact as positive/negative/neutral, and suggests a concrete action. Results are grouped by spend category in a collapsible card view.
+- **Ask Icarus** — Natural language queries against current signals + live article context. Ask *"What are the risks in cloud spend this week?"* and get a structured answer with supporting signals.
+- **RFP & Negotiation Prep** — Type *"RFP"*, *"negotiation"*, or *"tender"* in any query to generate a structured negotiation brief: market context, leverage points, key requirements, risk areas, suggested contract terms, and next steps — built from real market signals.
+- **Weekly Intelligence Brief** — One click generates an executive summary of the past 7 days: top risks, opportunities, priority actions, and per-category highlights.
+- **Learns over time** — User feedback (relevant / not relevant) adjusts per-category weights so signals surface in the right order as the system learns your priorities.
 
 When AWS raises your bill 18%, SpendLens doesn't just show you the number. It shows you that GPU spot prices rose 6%, US data center energy costs rose 4%, and the remaining 8% gap has no market justification. That's a negotiation, not an invoice to approve.
 
-The agent tracks leading indicators, not just lagging ones. A TSMC yield issue reported today means hardware prices in 90 days. An OPEC production cut means your facilities and travel costs will move in 6 weeks. SpendLens surfaces these signals before the invoice arrives.
+---
+
+## Running SpendLens
+
+```bash
+# 1. Activate virtual environment
+source .venv/Scripts/activate       # Git Bash / macOS
+.venv\Scripts\activate              # Windows PowerShell
+
+# 2. Add your Anthropic API key to .env
+echo "ANTHROPIC_API_KEY=sk-..." > .env
+
+# 3. Start the dashboard
+PYTHONUTF8=1 panel serve app.py --show --port 5006
+```
+
+Requires Python 3.11+ and the packages in `requirements.txt`.
 
 ---
 
@@ -120,11 +144,12 @@ The agent tracks leading indicators, not just lagging ones. A TSMC yield issue r
 | Dashboard | Panel (HoloViz) |
 | Charts | Plotly |
 | Data processing | Pandas |
-| AI classification | Claude API (Anthropic) |
+| AI classification & intelligence | Claude API (Anthropic) |
 | Persistent storage | SQLite |
+| News scraping | feedparser |
 | Validation | Pydantic |
 | Export | openpyxl |
-| Language | Python 3.14 |
+| Language | Python 3.11+ |
 
 ---
 
@@ -137,11 +162,14 @@ SpendLens is in active development, built as part of the Ironhack AI Bootcamp an
 | AI column mapper | ✅ Complete |
 | Data cleanup engine | ✅ Complete |
 | Category mapper (chunked + cached) | ✅ Complete |
-| Flag engine | 🔨 In progress |
-| Multi-source merger | 📋 Planned |
-| Persistent knowledge base | 📋 Planned |
-| Market intelligence agent | 📋 Phase 2 |
-| Multi-client support | 📋 Phase 3 |
+| Flag engine | ✅ Complete |
+| Icarus — RSS signal scanner | ✅ Live |
+| Icarus — Ask / query mode | ✅ Live |
+| Icarus — RFP & negotiation prep | ✅ Live |
+| Icarus — Weekly intelligence brief | ✅ Live |
+| Icarus — Feedback learning loop | 🔨 In progress |
+| Multi-source PO merger | 📋 Planned |
+| Multi-client support | 📋 Planned |
 
 ---
 
