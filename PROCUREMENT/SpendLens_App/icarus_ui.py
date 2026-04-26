@@ -285,9 +285,13 @@ _ENTER_KEY_HTML = """
     inp.addEventListener('keydown',function(e){
       if(e.key==='Enter'&&!e.shiftKey){
         e.preventDefault();
+        /* find the send button — matches any of the known labels */
         var btns=[].slice.call(document.querySelectorAll('.bk-btn'));
-        var ask=btns.find(function(b){return b.textContent&&b.textContent.trim()==='Ask';});
-        if(ask)ask.click();
+        var send=btns.find(function(b){
+          var t=(b.textContent||'').trim();
+          return t==='→'||t==='Ask'||t==='Send';
+        });
+        if(send)send.click();
       }
     });
   }else{setTimeout(waitForInput,800);}
@@ -408,6 +412,17 @@ def _build_rfp_html(data: dict, query: str) -> str:
   {_section("Risk Areas", risks, "rfp-risk")}
   {_section("Suggested Contract Terms", terms, "")}
   {_section("Next Steps", steps, "rfp-steps")}
+</div>"""
+
+
+def _build_result_placeholder_html() -> str:
+    return f"""{_CSS}
+<div style="border:1.5px dashed #e4e8f0;border-radius:10px;padding:18px 20px;
+            text-align:center;color:#ccc;font-size:13px;margin-bottom:4px;
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+            background:#fafbfc;">
+  Ask Icarus a question above — or type <b style="color:#bbb">RFP</b>
+  / <b style="color:#bbb">negotiation</b> to generate a brief
 </div>"""
 
 
@@ -625,7 +640,11 @@ class IcarusPanel(param.Parameterized):
         self._last_query   = ""
         self._header_pane  = pn.pane.HTML(_build_header_html(),  sizing_mode="stretch_width")
         self._cards_pane   = pn.pane.HTML(_build_cards_html(),   sizing_mode="stretch_width")
-        self._result_pane  = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
+        self._result_pane  = pn.pane.HTML(
+            _build_result_placeholder_html(),
+            sizing_mode="stretch_width",
+            visible=True,
+        )
         # Document store UI
         self._doc_list   = pn.Column(sizing_mode="stretch_width")
         self._doc_status = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
@@ -667,8 +686,9 @@ class IcarusPanel(param.Parameterized):
         """Trigger full RSS crawl — no query context."""
         if self._loading:
             return
-        self._last_query   = ""
-        self._result_pane.visible = False
+        self._last_query = ""
+        self._result_pane.object  = _build_result_placeholder_html()
+        self._result_pane.visible = True
 
         def _do():
             self._set_loading(True)
@@ -727,7 +747,7 @@ class IcarusPanel(param.Parameterized):
             except Exception as e:
                 print(f"[IcarusPanel] query error: {e}")
                 self._result_pane.object = _build_query_result_html(
-                    query, "Error – please try again."
+                    query, f"Error: {type(e).__name__} – please try again."
                 )
             finally:
                 self._loading = False
@@ -904,27 +924,39 @@ class IcarusPanel(param.Parameterized):
                 .bk-FormGroup{margin:0;}
             """],
         )
-        voice_pane = pn.pane.HTML(_VOICE_HTML, width=44, height=44)
+        voice_pane = pn.pane.HTML(_VOICE_HTML, width=36, height=36)
 
-        ask_btn = pn.widgets.Button(
-            name="Ask",
+        # Small → send button — same size as the other icons
+        send_btn = pn.widgets.Button(
+            name="→",
             button_type="primary",
+            width=36,
             stylesheets=["""
-                .bk-btn{height:36px;padding:0 18px;border-radius:8px;
-                  font-size:13px;font-weight:700;white-space:nowrap;
-                  background:#1B3A6B;border-color:#1B3A6B;
-                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+                .bk-btn{
+                  width:36px!important;height:36px!important;padding:0;
+                  border-radius:8px;font-size:17px;font-weight:700;
+                  background:#1B3A6B;border-color:#1B3A6B;color:white;
+                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                  display:flex;align-items:center;justify-content:center;
+                }
                 .bk-btn:hover{background:#2E5BA8;border-color:#2E5BA8;}
             """],
         )
-        ask_btn.on_click(lambda e: self.run(query=query_input.value))
+        send_btn.on_click(lambda e: self.run(query=query_input.value))
 
-        # Input row: text field · paperclip upload · mic · Ask
+        # Three icons grouped flush together with 4 px gap (≈2 mm)
+        icon_cluster = pn.Row(
+            self._file_input, voice_pane, send_btn,
+            align="center",
+            styles={"gap": "4px", "flex-shrink": "0"},
+        )
+
+        # Input row: [text field — stretch] [icon cluster]
         input_row = pn.Row(
-            query_input, self._file_input, voice_pane, ask_btn,
+            query_input, icon_cluster,
             align="center", sizing_mode="stretch_width",
             styles={"padding": "10px 18px", "border-bottom": "1px solid #f0f0f0",
-                    "background": "white", "gap": "8px"},
+                    "background": "white", "gap": "10px"},
         )
 
         # ── Compact quick-action pills ─────────────────────────────────────────

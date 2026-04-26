@@ -629,7 +629,7 @@ Return ONLY valid JSON (no markdown, no extra text):
 
     try:
         resp = client_api.messages.create(
-            model="claude-sonnet-4-6", max_tokens=2000,
+            model="claude-sonnet-4-6", max_tokens=3000,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = resp.content[0].text.strip()
@@ -696,15 +696,27 @@ Return ONLY valid JSON (no markdown, no extra text):
 
     try:
         resp = client_api.messages.create(
-            model="claude-sonnet-4-6", max_tokens=2000,
+            model="claude-sonnet-4-6", max_tokens=4096,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = resp.content[0].text.strip()
-        print(f"[Icarus] generate_rfp_brief raw ({len(raw)} chars): {raw[:300]}")
-        return _parse_json(raw)
+        print(f"[Icarus] generate_rfp_brief raw ({len(raw)} chars): {raw[:400]}")
+        try:
+            return _parse_json(raw)
+        except Exception as parse_err:
+            print(f"[Icarus] JSON parse failed ({parse_err}), returning raw text")
+            # Fall back: return the raw text as executive summary so the user sees something
+            return {
+                "title": f"Negotiation Brief",
+                "executive_summary": raw[:3000],
+                "market_context": [], "negotiation_levers": [],
+                "key_requirements": [], "risk_areas": [],
+                "suggested_terms": [], "next_steps": [],
+            }
     except Exception as e:
         print(f"[Icarus] generate_rfp_brief error: {type(e).__name__}: {e}")
-        return {"title": "RFP Brief", "executive_summary": "Generation failed – please try again.",
+        return {"title": "RFP Brief",
+                "executive_summary": f"Generation error: {type(e).__name__} – {e}",
                 "market_context": [], "negotiation_levers": [], "key_requirements": [],
                 "risk_areas": [], "suggested_terms": [], "next_steps": []}
 
