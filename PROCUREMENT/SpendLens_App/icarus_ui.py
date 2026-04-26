@@ -627,14 +627,35 @@ class IcarusPanel(param.Parameterized):
         self._cards_pane   = pn.pane.HTML(_build_cards_html(),   sizing_mode="stretch_width")
         self._result_pane  = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
         # Document store UI
-        self._doc_list     = pn.Column(sizing_mode="stretch_width")
-        self._doc_status   = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
-        self._file_input   = pn.widgets.FileInput(
+        self._doc_list   = pn.Column(sizing_mode="stretch_width")
+        self._doc_status = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
+        # FileInput styled as a compact paperclip icon in the input row
+        self._file_input = pn.widgets.FileInput(
             accept=".pdf,.docx,.txt,.csv,.xlsx",
             multiple=True,
             name="",
-            sizing_mode="stretch_width",
+            width=36,
+            stylesheets=["""
+                :host{width:36px!important;flex-shrink:0;}
+                .bk-input-group{
+                    position:relative;width:36px;height:36px;overflow:hidden;
+                    border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;
+                    display:flex;align-items:center;justify-content:center;
+                    transition:border-color 0.15s;
+                }
+                .bk-input-group:hover{border-color:#534AB7;}
+                .bk-input-group::before{
+                    content:"📎";font-size:15px;position:absolute;pointer-events:none;
+                }
+                input[type="file"]{
+                    position:absolute;opacity:0;width:100%;height:100%;
+                    cursor:pointer;z-index:1;
+                }
+                .bk-input-container{display:none!important;}
+            """],
         )
+        # Auto-upload when files are selected — no separate Upload button needed
+        self._file_input.param.watch(self._on_file_selected, 'value')
         self._refresh_doc_list()
 
     def _set_loading(self, loading: bool):
@@ -843,6 +864,11 @@ class IcarusPanel(param.Parameterized):
         self._file_input.value    = None
         self._file_input.filename = None
 
+    def _on_file_selected(self, event):
+        """Triggered automatically when FileInput value changes."""
+        if event.new is not None:
+            self._upload_docs()
+
     def _delete_doc(self, doc_id: int, filename: str):
         """Delete a document from the store and refresh the list."""
         icarus.delete_document(doc_id)
@@ -893,87 +919,69 @@ class IcarusPanel(param.Parameterized):
         )
         ask_btn.on_click(lambda e: self.run(query=query_input.value))
 
+        # Input row: text field · paperclip upload · mic · Ask
         input_row = pn.Row(
-            query_input, voice_pane, ask_btn,
+            query_input, self._file_input, voice_pane, ask_btn,
             align="center", sizing_mode="stretch_width",
             styles={"padding": "10px 18px", "border-bottom": "1px solid #f0f0f0",
                     "background": "white", "gap": "8px"},
         )
 
-        # ── Action row (Scan + Weekly Brief) ──────────────────────────────────
-        scan_btn = pn.widgets.Button(
-            name="🔍  Scan Feeds",
-            button_type="default",
+        # ── Compact quick-action pills ─────────────────────────────────────────
+        scan_pill = pn.widgets.Button(
+            name="🔍 Scan",
+            button_type="light",
             stylesheets=["""
-                .bk-btn{height:32px;padding:0 16px;border-radius:8px;
-                  font-size:12px;font-weight:600;white-space:nowrap;
-                  border:1.5px solid #1B3A6B;color:#1B3A6B;background:white;
+                .bk-btn{height:24px;padding:0 10px;border-radius:99px;font-size:11px;
+                  font-weight:600;white-space:nowrap;border:1px solid #d0d8e8;
+                  color:#1B3A6B;background:white;
                   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
-                .bk-btn:hover{background:#EFF3FB;}
+                .bk-btn:hover{background:#EFF3FB;border-color:#1B3A6B;}
             """],
         )
-        scan_btn.on_click(lambda e: self.scan())
+        scan_pill.on_click(lambda e: self.scan())
 
-        weekly_btn = pn.widgets.Button(
-            name="📋  Weekly Brief",
-            button_type="default",
+        weekly_pill = pn.widgets.Button(
+            name="📋 Weekly Brief",
+            button_type="light",
             stylesheets=["""
-                .bk-btn{height:32px;padding:0 16px;border-radius:8px;
-                  font-size:12px;font-weight:600;white-space:nowrap;
-                  border:1.5px solid #BA7517;color:#BA7517;background:white;
+                .bk-btn{height:24px;padding:0 10px;border-radius:99px;font-size:11px;
+                  font-weight:600;white-space:nowrap;border:1px solid #e8d8b0;
+                  color:#7A4A00;background:white;
                   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
-                .bk-btn:hover{background:#FFF3E0;}
+                .bk-btn:hover{background:#FFF3E0;border-color:#BA7517;}
             """],
         )
-        weekly_btn.on_click(lambda e: self.run_weekly_summary())
+        weekly_pill.on_click(lambda e: self.run_weekly_summary())
 
-        hint = pn.pane.HTML(
-            "<span style='font-size:11px;color:#999;"
+        hint_text = pn.pane.HTML(
+            "<span style='font-size:11px;color:#ccc;"
             "font-family:-apple-system,sans-serif;'>"
-            "Scan RSS feeds &middot; Ask questions &middot; Type <b>RFP</b> or <b>negotiation</b> to generate a brief"
+            "Type <b style='color:#888'>RFP</b> or <b style='color:#888'>negotiation</b> to generate a brief"
             "</span>",
             sizing_mode="stretch_width",
         )
 
         action_row = pn.Row(
-            scan_btn, weekly_btn, hint,
+            scan_pill, weekly_pill, hint_text,
             align="center", sizing_mode="stretch_width",
-            styles={"padding": "8px 18px", "background": "#f8f9fa",
-                    "border-bottom": "1px solid #f0f0f0", "gap": "10px"},
+            styles={"padding": "6px 18px", "background": "#fafafa",
+                    "border-bottom": "1px solid #f0f0f0", "gap": "8px"},
         )
 
-        # ── Document upload section ───────────────────────────────────────────
-        upload_btn = pn.widgets.Button(
-            name="Upload",
-            button_type="default",
-            stylesheets=["""
-                .bk-btn{height:32px;padding:0 14px;border-radius:8px;
-                  font-size:12px;font-weight:600;white-space:nowrap;
-                  border:1.5px solid #534AB7;color:#534AB7;background:white;
-                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
-                .bk-btn:hover{background:#EEEDFE;}
-            """],
-        )
-        upload_btn.on_click(lambda e: self._upload_docs())
-
+        # ── Document section (list + status only — upload via 📎 icon in input row)
         doc_section = pn.Column(
             pn.pane.HTML(
                 f'{_CSS}<div class="doc-section-title">📎 Documents'
                 '<span style="font-size:10px;font-weight:400;color:#aaa;margin-left:6px;">'
-                'Upload contracts, pricing sheets, or agreements — Icarus will reference them in negotiations</span>'
-                '</div>',
+                'Click 📎 above to upload contracts, pricing sheets or agreements'
+                '</span></div>',
                 sizing_mode="stretch_width",
-            ),
-            pn.Row(
-                self._file_input,
-                upload_btn,
-                align="center", sizing_mode="stretch_width",
-                styles={"gap": "8px"},
             ),
             self._doc_status,
             self._doc_list,
             sizing_mode="stretch_width",
-            styles={"padding": "10px 18px 12px", "background": "#fafcff",
+            styles={"padding": "8px 18px 12px", "background": "#fafcff",
                     "border-bottom": "1px solid #f0f0f0"},
         )
 

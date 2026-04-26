@@ -877,7 +877,8 @@ header = pn.pane.HTML(f"""
 </div>""", sizing_mode="stretch_width")
 
 # ── Sidebar ──
-sidebar_col = pn.Column(
+# Dashboard-only sections (hidden when Icarus tab is active)
+_dash_sidebar = pn.Column(
     pn.pane.HTML(f"<div style='color:{NAVY}; font-weight:700; font-size:12px; "
                  f"text-transform:uppercase; letter-spacing:1px;'>Year</div>"),
     year_select,
@@ -895,6 +896,10 @@ sidebar_col = pn.Column(
                  f"text-transform:uppercase; letter-spacing:1px;'>Icarus</div>"),
     icarus_btn,
     pn.layout.Divider(),
+)
+
+sidebar_col = pn.Column(
+    _dash_sidebar,
     status_log,
     width=270,
 )
@@ -947,6 +952,12 @@ tabs = pn.Tabs(
     ("🪶 Icarus", icarus_panel.view()),
     sizing_mode="stretch_width",
 )
+
+# Hide dashboard sidebar when user switches to the Icarus tab (index 2)
+def _on_tab_change(event):
+    _dash_sidebar.visible = (event.new != 2)
+
+tabs.param.watch(_on_tab_change, 'active')
 
 template = pn.template.FastListTemplate(
     title="SpendLens",
