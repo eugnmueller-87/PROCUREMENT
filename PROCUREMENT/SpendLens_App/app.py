@@ -603,10 +603,12 @@ year_select   = pn.widgets.Select(
     name="Year", options=["All years"] + [str(y) for y in YEARS],
     value="All years", width=240)
 file_input    = pn.widgets.FileInput(accept=".csv,.xlsx,.xls", name="Upload spend data")
-dataset_label = pn.pane.Markdown("**Dataset:** Parloa (default)",
+dataset_label = pn.pane.Markdown("",
                                   styles={"color": NAVY, "font-size": "13px"})
 export_btn    = pn.widgets.Button(name="📥 Export CFO Report",
                                    button_type="primary", width=240)
+icarus_btn    = pn.widgets.Button(name="🪶 Run Icarus Scan",
+                                   button_type="success", width=240)
 status_log    = pn.pane.Markdown("", styles={"color": DIM, "font-size": "12px"})
 
 # Content panels
@@ -889,6 +891,10 @@ sidebar_col = pn.Column(
                  f"text-transform:uppercase; letter-spacing:1px;'>Reports</div>"),
     export_btn,
     pn.layout.Divider(),
+    pn.pane.HTML(f"<div style='color:{NAVY}; font-weight:700; font-size:12px; "
+                 f"text-transform:uppercase; letter-spacing:1px;'>Icarus</div>"),
+    icarus_btn,
+    pn.layout.Divider(),
     status_log,
     width=270,
 )
@@ -922,9 +928,23 @@ main_tab = pn.Column(
     sizing_mode="stretch_width",
 )
 
+from icarus_ui import IcarusPanel
+icarus_panel = IcarusPanel(
+    client_categories=list(df_meta["category"].dropna().unique()),
+    client_name="Client"
+)
+icarus_panel.load_recent()
+
+def handle_icarus(event):
+    status_log.object = "🪶 Icarus crawl started — check the Icarus tab for results..."
+    icarus_panel.run()
+
+icarus_btn.on_click(handle_icarus)
+
 tabs = pn.Tabs(
     ("Dashboard", main_tab),
     ("Deep Dive", chart_deep),
+    ("🪶 Icarus", icarus_panel.view()),
     sizing_mode="stretch_width",
 )
 

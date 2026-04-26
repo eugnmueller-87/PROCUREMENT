@@ -10,6 +10,9 @@ import json
 import os
 from datetime import datetime, timezone
 from anthropic import Anthropic
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -20,37 +23,52 @@ RSS_SOURCES = [
     {
         "name": "Reuters Business",
         "url": "https://feeds.reuters.com/reuters/businessNews",
-        "categories": ["Cloud & Compute", "Hardware", "Facilities", "Logistics", "Professional Services"],
+        "categories": ["Cloud & Compute", "Hardware & Equipment", "Facilities & Office",
+                       "Professional Services", "Recruitment & HR", "Marketing & Campaigns"],
     },
     {
         "name": "Reuters Technology",
         "url": "https://feeds.reuters.com/reuters/technologyNews",
-        "categories": ["Cloud & Compute", "Hardware", "Software & SaaS", "AI & ML"],
+        "categories": ["Cloud & Compute", "Hardware & Equipment", "IT Software & SaaS",
+                       "AI/ML APIs & Data", "Telecom & Voice"],
     },
     {
         "name": "The Register",
         "url": "https://www.theregister.com/headlines.atom",
-        "categories": ["Cloud & Compute", "Hardware", "Software & SaaS", "AI & ML", "Telecom"],
+        "categories": ["Cloud & Compute", "Hardware & Equipment", "IT Software & SaaS",
+                       "AI/ML APIs & Data", "Telecom & Voice"],
     },
     {
         "name": "Handelsblatt",
         "url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
-        "categories": ["Facilities", "Professional Services", "Logistics", "Energy"],
+        "categories": ["Facilities & Office", "Professional Services", "Real Estate",
+                       "Recruitment & HR", "Travel & Expenses"],
     },
     {
         "name": "DatacenterDynamics",
         "url": "https://www.datacenterdynamics.com/en/rss/",
-        "categories": ["Cloud & Compute", "Facilities", "Hardware", "Energy"],
+        "categories": ["Cloud & Compute", "Facilities & Office", "Hardware & Equipment"],
     },
     {
         "name": "Euractiv",
         "url": "https://www.euractiv.com/feed/",
-        "categories": ["Facilities", "Energy", "Logistics", "Professional Services"],
+        "categories": ["Facilities & Office", "Professional Services", "Real Estate", "Travel & Expenses"],
     },
     {
         "name": "Spend Matters",
         "url": "https://spendmatters.com/feed/",
-        "categories": ["Professional Services", "Software & SaaS", "Freelancer & Contractors"],
+        "categories": ["Professional Services", "IT Software & SaaS", "Recruitment & HR",
+                       "Marketing & Campaigns"],
+    },
+    {
+        "name": "FreelancerMap",
+        "url": "https://www.freelancermap.de/blog/feed/",
+        "categories": ["Recruitment & HR"],
+    },
+    {
+        "name": "Business Travel News",
+        "url": "https://www.businesstravelnews.com/rss",
+        "categories": ["Travel & Expenses"],
     },
 ]
 
@@ -77,6 +95,7 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             query_id    INTEGER REFERENCES queries(id),
             timestamp   TEXT NOT NULL,
+            published   TEXT,                -- article publish date from RSS
             source      TEXT NOT NULL,
             headline    TEXT NOT NULL,
             summary     TEXT NOT NULL,
@@ -88,6 +107,12 @@ def init_db():
             feedback    TEXT                 -- 'relevant' | 'not_relevant' | NULL
         )
     """)
+    # migration: add published column if DB already exists without it
+    try:
+        c.execute("ALTER TABLE signals ADD COLUMN published TEXT")
+        conn.commit()
+    except Exception:
+        pass
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS category_weights (
@@ -121,12 +146,14 @@ def save_signals(query_id, signals):
     c = conn.cursor()
     for s in signals:
         c.execute("""
-            INSERT INTO signals 
-            (query_id, timestamp, source, headline, summary, category, relevance, impact, action, url)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO signals
+            (query_id, timestamp, published, source, headline, summary,
+             category, relevance, impact, action, url)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (
             query_id,
             datetime.now(timezone.utc).isoformat(),
+            s.get("published"),
             s.get("source"), s.get("headline"), s.get("summary"),
             s.get("category"), s.get("relevance"), s.get("impact"),
             s.get("action"), s.get("url")
@@ -178,16 +205,17 @@ def get_category_weights():
 
 def get_recent_signals(limit=20):
     """Fetch most recent signals from memory for dashboard display."""
+    init_db()  # ensures published column exists
     conn = sqlite3.connect(ICARUS_DB)
     c = conn.cursor()
     c.execute("""
-        SELECT id, timestamp, source, headline, summary, category, 
+        SELECT id, timestamp, published, source, headline, summary, category,
                relevance, impact, action, url, feedback
         FROM signals
         ORDER BY timestamp DESC
         LIMIT ?
     """, (limit,))
-    cols = ["id","timestamp","source","headline","summary","category",
+    cols = ["id","timestamp","published","source","headline","summary","category",
             "relevance","impact","action","url","feedback"]
     rows = [dict(zip(cols, row)) for row in c.fetchall()]
     conn.close()
@@ -218,17 +246,33 @@ def fetch_articles(client_categories):
             if not feed.entries:
                 continue
             for entry in feed.entries[:10]:  # max 10 per source
-                articles.append({
-                    "source": feed_cfg["name"],
-                    "headline": entry.get("title", ""),
-                    "summary": entry.get("summary", entry.get("description", ""))[:500],
-                    "url": entry.get("link", ""),
-                    "relevant_categories": list(relevant),
-                })
+                    # extract publish date
+                    pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+                    if pub_parsed:
+                        from datetime import datetime as _dt
+                        pub_str = _dt(*pub_parsed[:6], tzinfo=timezone.utc).isoformat()
+                    else:
+                        pub_str = datetime.now(timezone.utc).isoformat()
+                    articles.append({
+                        "source": feed_cfg["name"],
+                        "headline": entry.get("title", ""),
+                        "summary": entry.get("summary", entry.get("description", ""))[:500],
+                        "url": entry.get("link", ""),
+                        "relevant_categories": list(relevant),
+                        "published": pub_str,
+                    })
         except Exception as e:
             print(f"[Icarus] Feed error ({feed_cfg['name']}): {e}")
 
-    return articles
+    # Deduplicate by headline (same story picked up by multiple feeds)
+    seen_headlines: set = set()
+    unique: list = []
+    for a in articles:
+        key = a["headline"].strip().lower()
+        if key and key not in seen_headlines:
+            seen_headlines.add(key)
+            unique.append(a)
+    return unique
 
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
@@ -244,7 +288,7 @@ def analyze_with_claude(articles, client_categories, client_name="the client"):
     client = Anthropic()
 
     articles_text = "\n\n".join([
-        f"SOURCE: {a['source']}\nHEADLINE: {a['headline']}\nSUMMARY: {a['summary']}\nURL: {a['url']}\nCATEGORIES: {', '.join(a['relevant_categories'])}"
+        f"SOURCE: {a['source']}\nDATE: {a.get('published','')[:10]}\nHEADLINE: {a['headline']}\nSUMMARY: {a['summary']}\nURL: {a['url']}\nCATEGORIES: {', '.join(a['relevant_categories'])}"
         for a in articles
     ])
 
@@ -266,13 +310,14 @@ Return ONLY a JSON array (no markdown, no preamble). Each signal object must hav
 - "impact": string — "positive", "negative", or "neutral" (for procurement costs/risk)
 - "action": string — one concrete suggested action for the procurement team
 - "url": string — article URL
+- "published": string — article date (YYYY-MM-DD)
 
 Articles:
 {articles_text}"""
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4000,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -287,6 +332,227 @@ Articles:
     except Exception as e:
         print(f"[Icarus] Claude API error: {e}")
         return []
+
+
+# ── Targeted query ────────────────────────────────────────────────────────────
+
+def query_with_claude(query: str, client_categories: list, client_name: str = "Client") -> dict:
+    """
+    Answer a specific procurement question using recent signals + fresh articles.
+    Returns {"answer": str, "signals": list}.
+    """
+    init_db()
+    client_api = Anthropic()
+
+    # Context from memory
+    recent = get_recent_signals(limit=30)
+    ctx = "\n".join(
+        f"- [{s['category']}] {s['headline']} → {s.get('action','')}"
+        for s in recent
+    ) if recent else "Keine gespeicherten Signale."
+
+    # Fresh scan for relevant articles
+    articles = fetch_articles(client_categories)
+    art_text = "\n".join(
+        f"- {a['headline']} ({a['source']}, {a.get('published','')[:10]})"
+        for a in articles[:25]
+    )
+
+    prompt = f"""Du bist Icarus, ein Procurement-Intelligence-Agent für SpendLens.
+
+Client: {client_name}
+Spend-Kategorien: {', '.join(client_categories)}
+
+Frage des Nutzers: {query}
+
+Gespeicherte Signale (Kontext):
+{ctx}
+
+Aktuelle Schlagzeilen:
+{art_text}
+
+Beantworte die Frage in 3–5 Sätzen mit konkreten Handlungsempfehlungen für das Procurement-Team.
+Gib dann die 3–5 relevantesten Signale zurück.
+
+Antworte NUR mit JSON (kein Markdown):
+{{
+  "answer": "...",
+  "signals": [
+    {{
+      "headline": "...", "category": "...", "relevance": 8,
+      "impact": "negative", "action": "...", "source": "...",
+      "url": "...", "published": "YYYY-MM-DD", "summary": "..."
+    }}
+  ]
+}}"""
+
+    try:
+        resp = client_api.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = resp.content[0].text.strip()
+        # strip markdown fences
+        import re as _re
+        raw = _re.sub(r'^```\w*\s*', '', raw)
+        raw = _re.sub(r'\s*```$', '', raw).strip()
+        # extract outermost JSON object robustly
+        m = _re.search(r'\{[\s\S]*\}', raw)
+        if m:
+            raw = m.group()
+        return json.loads(raw)
+    except Exception as e:
+        print(f"[Icarus] query_with_claude error: {e}")
+        return {"answer": "Analysis error – please try again.", "signals": []}
+
+
+# ── Weekly summary ────────────────────────────────────────────────────────────
+
+def weekly_summary(client_categories: list, client_name: str = "Client") -> dict:
+    """
+    Generate a structured weekly procurement intelligence brief from stored signals.
+    Returns a dict with week, headline, top_risks, top_opportunities, actions,
+    category_highlights, signals.
+    """
+    import re as _re
+    from datetime import timedelta
+    init_db()
+    client_api = Anthropic()
+
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    conn = sqlite3.connect(ICARUS_DB)
+    c = conn.cursor()
+    c.execute("""
+        SELECT source, headline, category, relevance, impact, action, summary, published
+        FROM signals WHERE timestamp > ?
+        ORDER BY relevance DESC LIMIT 50
+    """, (week_ago,))
+    cols = ["source","headline","category","relevance","impact","action","summary","published"]
+    week_signals = [dict(zip(cols, row)) for row in c.fetchall()]
+    conn.close()
+
+    if not week_signals:
+        week_signals = get_recent_signals(limit=30)
+
+    week_label = datetime.now(timezone.utc).strftime("Week of %B %d, %Y")
+    if not week_signals:
+        return {"week": week_label, "headline": "No signals found. Run a scan first.",
+                "top_risks": [], "top_opportunities": [], "actions": [],
+                "category_highlights": {}, "signals": []}
+
+    signals_text = "\n".join(
+        f"[{s.get('category','?')}] {s.get('headline','')} "
+        f"(Impact: {s.get('impact','?')}, Relevance: {s.get('relevance','?')}/10)\n  → {s.get('action','')}"
+        for s in week_signals[:30]
+    )
+
+    prompt = f"""You are Icarus, a procurement intelligence agent for SpendLens.
+Client: {client_name}
+Spend Categories: {', '.join(client_categories)}
+
+Generate a concise weekly procurement intelligence brief for {week_label}.
+
+Signals from the past 7 days:
+{signals_text}
+
+Return ONLY valid JSON (no markdown, no extra text):
+{{
+  "week": "{week_label}",
+  "headline": "one sentence executive summary of the week",
+  "top_risks": ["risk 1", "risk 2", "risk 3"],
+  "top_opportunities": ["opportunity 1", "opportunity 2"],
+  "actions": ["priority action 1", "priority action 2", "priority action 3"],
+  "category_highlights": {{
+    "Category Name": "one sentence key insight"
+  }},
+  "signals": [
+    {{"headline": "...", "category": "...", "impact": "...", "action": "..."}}
+  ]
+}}"""
+
+    try:
+        resp = client_api.messages.create(
+            model="claude-sonnet-4-6", max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r'^```\w*\s*', '', raw)
+        raw = _re.sub(r'\s*```$', '', raw).strip()
+        m = _re.search(r'\{[\s\S]*\}', raw)
+        if m:
+            raw = m.group()
+        data = json.loads(raw)
+        if not data.get("signals"):
+            data["signals"] = [{"headline": s["headline"], "category": s["category"],
+                                 "impact": s["impact"], "action": s["action"]}
+                                for s in week_signals[:5]]
+        return data
+    except Exception as e:
+        print(f"[Icarus] weekly_summary error: {e}")
+        return {"week": week_label, "headline": f"Summary generation failed – please try again.",
+                "top_risks": [], "top_opportunities": [], "actions": [],
+                "category_highlights": {}, "signals": week_signals[:5]}
+
+
+# ── RFP / negotiation brief ───────────────────────────────────────────────────
+
+def generate_rfp_brief(query: str, client_categories: list, client_name: str = "Client") -> dict:
+    """
+    Generate a structured procurement negotiation brief / RFP preparation.
+    Detects topic from query, uses stored signals as market context.
+    Returns dict with title, executive_summary, market_context, negotiation_levers,
+    key_requirements, risk_areas, suggested_terms, next_steps.
+    """
+    import re as _re
+    init_db()
+    client_api = Anthropic()
+
+    recent = get_recent_signals(limit=40)
+    ctx = "\n".join(
+        f"- [{s['category']}] {s['headline']}: {s.get('action','')}"
+        for s in recent
+    ) if recent else "No stored signals."
+
+    prompt = f"""You are Icarus, a senior procurement intelligence agent for SpendLens.
+Client: {client_name}
+Spend Categories: {', '.join(client_categories)}
+Request: {query}
+
+Based on current market signals, prepare a procurement negotiation brief and RFP preparation document.
+
+Market Intelligence Context:
+{ctx}
+
+Return ONLY valid JSON (no markdown, no extra text):
+{{
+  "title": "RFP / Negotiation Brief: [specific topic]",
+  "executive_summary": "2-3 sentences summarising market position and recommended approach",
+  "market_context": ["key market fact 1", "key market fact 2", "key market fact 3"],
+  "negotiation_levers": ["lever 1 with rationale", "lever 2 with rationale", "lever 3 with rationale"],
+  "key_requirements": ["must-have requirement 1", "must-have requirement 2", "must-have requirement 3"],
+  "risk_areas": ["risk 1", "risk 2"],
+  "suggested_terms": ["suggested contractual term 1", "suggested contractual term 2", "suggested contractual term 3"],
+  "next_steps": ["immediate action 1", "immediate action 2", "immediate action 3"]
+}}"""
+
+    try:
+        resp = client_api.messages.create(
+            model="claude-sonnet-4-6", max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r'^```\w*\s*', '', raw)
+        raw = _re.sub(r'\s*```$', '', raw).strip()
+        m = _re.search(r'\{[\s\S]*\}', raw)
+        if m:
+            raw = m.group()
+        return json.loads(raw)
+    except Exception as e:
+        print(f"[Icarus] generate_rfp_brief error: {e}")
+        return {"title": "RFP Brief", "executive_summary": "Generation failed – please try again.",
+                "market_context": [], "negotiation_levers": [], "key_requirements": [],
+                "risk_areas": [], "suggested_terms": [], "next_steps": []}
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
@@ -318,9 +584,24 @@ def run(client_categories=None, client_name="Client"):
 
     # 2. Analyze with Claude
     signals = analyze_with_claude(articles, client_categories, client_name)
-    print(f"[Icarus] Extracted {len(signals)} signals")
+    # Deduplicate signals by headline
+    seen_sig: set = set()
+    deduped: list = []
+    for s in signals:
+        key = s.get("headline", "").strip().lower()
+        if key and key not in seen_sig:
+            seen_sig.add(key)
+            deduped.append(s)
+    signals = deduped
+    print(f"[Icarus] Extracted {len(signals)} signals (after dedup)")
 
-    # 3. Apply learned weights — re-sort by (relevance × category_weight)
+    # 3. Back-fill published date from article lookup
+    url_to_pub = {a["url"]: a.get("published", "") for a in articles}
+    for s in signals:
+        if not s.get("published"):
+            s["published"] = url_to_pub.get(s.get("url", ""), "")
+
+    # 4. Apply learned weights — re-sort by (relevance × category_weight)
     weights = get_category_weights()
     for s in signals:
         w = weights.get(s.get("category", ""), 1.0)
