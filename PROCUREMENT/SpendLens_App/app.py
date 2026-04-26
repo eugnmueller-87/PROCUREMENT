@@ -14,7 +14,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import io
+import math
 import os
+import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -155,6 +157,89 @@ CATEGORIES_RAW = [
      "lead_time_days": 3, "contract_end": "2026-09", "capex_opex": "Opex", "region": "DACH",
      "po_coverage_pct": 40, "contract_coverage_pct": 50},
 ]
+
+SUPPLIER_INTEL = {
+    "AWS": {
+        "contract":     "Enterprise Discount Program (EDP) — expires Sep 2026",
+        "terms":        "Net 30 · Annual commitment €18M",
+        "price_trend":  "+18% YoY (2024) — GPU & egress cost drivers",
+        "discount":     "15% EDP volume discount currently in place",
+        "risk":         "Hosts 65% of prod infra — no active failover in place",
+        "action":       "Renegotiate before Sep 2026. GPU spot rates up 6%, energy costs up 4% — the remaining 8pp has no market justification. Push for 20%+ EDP discount or introduce Azure as leverage.",
+    },
+    "Google Cloud": {
+        "contract":     "Committed Use Discount — rolling 12-month",
+        "terms":        "Net 30 · Flex commitment",
+        "price_trend":  "+9% YoY (2024) — BigQuery & Vertex pricing",
+        "discount":     "10% committed use discount",
+        "risk":         "Secondary cloud — used for data warehouse & ML pipelines",
+        "action":       "Increase Google Cloud commitment to strengthen negotiation leverage against AWS at renewal.",
+    },
+    "Azure": {
+        "contract":     "Microsoft Enterprise Agreement — expires Dec 2026",
+        "terms":        "Net 30 · Bundled with M365",
+        "price_trend":  "+11% YoY (2024) — Copilot add-on uplift",
+        "discount":     "12% EA discount + MACC €5M",
+        "risk":         "M365 dependency creates switching costs — moderate lock-in",
+        "action":       "Challenge Copilot seat uplift in EA renewal — adoption below 30%. Remove unused seats before renewal.",
+    },
+    "OpenAI": {
+        "contract":     "API pay-as-you-go — no committed contract",
+        "terms":        "Monthly billing · No SLA",
+        "price_trend":  "-22% YoY (2024) — GPT-4o pricing reduction",
+        "discount":     "None — no volume agreement in place",
+        "risk":         "No contract, no SLA, no price protection — rate can change any time",
+        "action":       "Negotiate an annual API commitment for 20–30% discount. Evaluate Anthropic & Mistral as dual-source to reduce dependency.",
+    },
+    "Anthropic": {
+        "contract":     "API pay-as-you-go — no committed contract",
+        "terms":        "Monthly billing",
+        "price_trend":  "Stable 2024 — Claude 3 pricing held",
+        "discount":     "None",
+        "risk":         "Low spend, high strategic value — early-stage dependency",
+        "action":       "Lock in a committed API agreement before spend scales. Anthropic offers enterprise pricing at >€500K/yr.",
+    },
+    "Personio": {
+        "contract":     "SaaS subscription — annual, auto-renews Dec 2026",
+        "terms":        "Annual prepay",
+        "price_trend":  "+25% YoY (2024) — seat expansion + tier upgrade",
+        "discount":     "8% multi-year discount offered at last renewal",
+        "risk":         "Core HRIS — data portability limited, high switching cost",
+        "action":       "Freeze seat count growth. Audit active seats — last review found 18% inactive. Negotiate 3-year deal to lock current rate before next price uplift.",
+    },
+    "Twilio": {
+        "contract":     "Volume-based — no formal agreement",
+        "terms":        "Monthly · Pay per use",
+        "price_trend":  "+14% YoY (2024) — SMS & voice rate increases",
+        "discount":     "None negotiated",
+        "risk":         "Single source for all SMS/voice — no fallback carrier",
+        "action":       "Onboard Vonage as secondary carrier immediately. Then renegotiate Twilio volume pricing with dual-source as leverage.",
+    },
+    "WeWork Berlin": {
+        "contract":     "Lease agreement — expires Dec 2028",
+        "terms":        "Monthly · €2,400/desk",
+        "price_trend":  "+8% YoY (2024) — CPI escalation clause",
+        "discount":     "3 months free received at signing",
+        "risk":         "WeWork financial instability — monitor covenant triggers",
+        "action":       "Explore direct landlord negotiation before 2028 renewal. WeWork margin is ~40% — significant savings available going direct.",
+    },
+    "Deloitte": {
+        "contract":     "Framework agreement — annual SOW renewal",
+        "terms":        "Net 45 · Daily rate €1,800–2,400",
+        "price_trend":  "+6% YoY (2024) — rate card inflation",
+        "discount":     "10% framework discount vs. spot market",
+        "risk":         "Key-person dependency — 3 named partners on critical projects",
+        "action":       "Cap daily rate increases at CPI in next SOW. Build in knowledge transfer obligations to reduce key-person lock-in.",
+    },
+    "Lufthansa": {
+        "contract":     "Corporate travel agreement — expires Sep 2026",
+        "terms":        "Monthly settlement",
+        "price_trend":  "+19% YoY (2024) — fuel surcharge + capacity reduction",
+        "discount":     "12% negotiated discount vs. public fares",
+        "risk":         "Low — multiple airline alternatives available",
+        "action":       "Renegotiate with Ryanair/easyJet benchmarks in hand. 40% of routes have low-cost alternatives at 60% of Lufthansa price.",
+    },
+}
 
 # Per-year scaling factors (index 0=2022 … 4=2026)
 # Simulate procurement maturity growing over time
@@ -406,12 +491,12 @@ def chart_risk_bubble(df_meta):
         fig.add_trace(go.Scatter(
             x=[row["concentration"]], y=[row["spend_2026e"]],
             mode="markers+text",
-            marker=dict(size=max(n * 9, 18),
-                        color=RISK_COLORS.get(row["risk"], DIM), opacity=0.75,
+            marker=dict(size=max(n * 16, 32),
+                        color=RISK_COLORS.get(row["risk"], DIM), opacity=0.80,
                         line=dict(color=WHITE, width=2)),
-            text=[row["category"][:16]],
+            text=[row["category"]],
             textposition="top center",
-            textfont=dict(size=9, color=TEXT),
+            textfont=dict(size=10, color=TEXT, family="Georgia, serif"),
             name=row["category"],
             customdata=[[row["category"], row["risk"], n,
                          row.get("suppliers", ""), row["concentration"]]],
@@ -424,18 +509,31 @@ def chart_risk_bubble(df_meta):
             ),
         ))
     # High-concentration zone: category absorbs >20% of total company spend
-    x_max = df_meta["concentration"].max() * 1.15
+    x_min_data = df_meta["concentration"].min()
+    x_max = df_meta["concentration"].max() * 1.25
     y_max = df_meta["spend_2026e"].max() * 1.1
+    total_spend = df_meta["spend_2026e"].sum()
     fig.add_shape(type="rect", x0=20, x1=x_max, y0=0, y1=y_max,
                   fillcolor="rgba(192,57,43,0.05)",
                   line=dict(color="rgba(192,57,43,0.3)", dash="dot"))
-    fig.add_annotation(x=(20 + x_max) / 2, y=y_max * 0.97,
+    fig.add_annotation(x=25, y=y_max * 0.97,
                        text="⚠ HIGH CONCENTRATION ZONE", showarrow=False,
-                       font=dict(size=11, color=RED))
+                       font=dict(size=11, color=RED), xanchor="left")
+    fig.add_annotation(
+        text=f"<b>Total Spend</b><br>€{total_spend:,.0f}K",
+        xref="paper", yref="paper", x=0.01, y=0.99,
+        showarrow=False, xanchor="left", yanchor="top",
+        font=dict(size=12, color=WHITE, family="Georgia, serif"),
+        bgcolor=NAVY, bordercolor=NAVY2, borderwidth=1, borderpad=8,
+    )
     fig.update_layout(
         title="Risk Map — Category Share of Total Spend (bubble size = no. of suppliers)",
-        **LAYOUT, height=500, showlegend=False,
+        **LAYOUT, height=560, showlegend=False,
         xaxis_title="Category Spend as % of Total Company Spend",
+        xaxis_type="log",
+        xaxis_tickvals=[1, 2, 3, 5, 8, 12, 20, 35, 50],
+        xaxis_ticktext=["1%", "2%", "3%", "5%", "8%", "12%", "20%", "35%", "50%"],
+        xaxis_range=[math.log10(max(x_min_data * 0.7, 0.8)), math.log10(x_max)],
         yaxis_title="Spend (€K)",
     )
     return fig
@@ -464,22 +562,43 @@ def chart_ebitda_waterfall(df_ebitda):
 
 
 def chart_treemap(df_meta):
-    df = df_meta.copy()
-    df["label"] = df.apply(
-        lambda r: f"{r['category']}<br>€{r['spend_2026e']:,.0f}K", axis=1)
+    rows = []
+    for _, r in df_meta.iterrows():
+        cat         = r["category"]
+        spend_total = r["spend_2026e"]
+        risk        = r["risk"]
+        suppliers   = [s.strip() for s in str(r.get("suppliers", "")).split(",") if s.strip()][:5]
+        if not suppliers:
+            suppliers = ["Unknown"]
+        weights = [1 / (i + 1) for i in range(len(suppliers))]
+        wsum    = sum(weights)
+        for i, sup in enumerate(suppliers):
+            rows.append({
+                "category": cat,
+                "supplier": f"{i + 1}. {sup}",
+                "spend":    round(spend_total * weights[i] / wsum),
+                "risk":     risk,
+            })
+    df = pd.DataFrame(rows)
     fig = px.treemap(
-        df, path=["label"], values="spend_2026e",
-        color="concentration",
-        color_continuous_scale=[[0, GREEN], [0.5, YELLOW], [1, RED]],
-        range_color=[0, 80],
+        df,
+        path=["category", "supplier"],
+        values="spend",
+        color="risk",
+        color_discrete_map=RISK_COLORS,
+        custom_data=["spend", "risk"],
+    )
+    fig.update_traces(
+        textfont=dict(size=11),
+        hovertemplate="<b>%{label}</b><br>Spend: €%{customdata[0]:,.0f}K<br>Risk: %{customdata[1]}<extra></extra>",
     )
     fig.update_layout(
-        title="Spend by Category (size) × Concentration (color)",
+        title="Spend by Category (size) × Risk (color) — click a category to expand suppliers",
         paper_bgcolor=BG, font=dict(color=TEXT, family="Georgia,serif"),
-        height=450,
-        coloraxis_colorbar=dict(title="Concentration %"),
+        height=680,
+        legend=dict(title="Risk", bgcolor="rgba(255,255,255,0.9)",
+                    font=dict(size=11), bordercolor=BORDER, borderwidth=1),
     )
-    fig.update_traces(textfont=dict(size=13))
     return fig
 
 
@@ -709,7 +828,7 @@ file_input    = pn.widgets.FileInput(
         }
         .bk-input-group:hover { background:#2E5BA8; }
         .bk-input-group::before {
-            content:"📂  Upload Spend Data"; color:white; font-size:13px;
+            content:"📂  Upload Data"; color:white; font-size:13px;
             font-family:Georgia,serif; font-weight:600;
             pointer-events:none; position:absolute;
         }
@@ -735,8 +854,17 @@ chart_s1     = pn.Column(sizing_mode="stretch_width")
 chart_s2     = pn.Column(sizing_mode="stretch_width")
 chart_s3     = pn.Column(sizing_mode="stretch_width")
 chart_s4     = pn.Column(sizing_mode="stretch_width")
-chart_deep   = pn.Column(sizing_mode="stretch_width")
-drill_panel  = pn.Column(sizing_mode="stretch_width")
+chart_deep      = pn.Column(sizing_mode="stretch_width")
+drill_panel     = pn.Column(sizing_mode="stretch_width")
+treemap_pane      = pn.pane.Plotly(sizing_mode="stretch_width")
+supplier_detail   = pn.pane.HTML("", sizing_mode="stretch_width")
+supplier_news     = pn.pane.HTML("", sizing_mode="stretch_width")
+fetch_signals_btn = pn.widgets.Button(name="🔍 Fetch latest signals", button_type="primary",
+                                      width=200, margin=(8, 0, 0, 0))
+treemap_back      = pn.widgets.Button(name="← Back to category view", button_type="light",
+                                      width=200, margin=(0, 0, 8, 0))
+treemap_frame     = pn.Column(sizing_mode="stretch_width")
+_current_supplier = [""]  # mutable box for the fetch button callback
 
 data_preview = pn.widgets.Tabulator(
     df_meta[["category", "spend_2026e", "risk", "concentration", "contract_end"]],
@@ -858,8 +986,10 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
             pn.pane.Plotly(chart_cagr(dm),             sizing_mode="stretch_width"),
             pn.pane.Plotly(chart_capex_opex(ds, dm),   sizing_mode="stretch_width"),
         ),
-        pn.pane.Plotly(chart_treemap(dm), sizing_mode="stretch_width"),
+        treemap_frame,
     ])
+    treemap_pane.object = chart_treemap(dm)
+    treemap_frame.objects = [treemap_pane]
 
     # ── Data preview — rename column to show the actual year ──
     if "category" in dm.columns:
@@ -955,6 +1085,184 @@ def handle_export(event):
         status_log.object = f"❌ Export error: {str(e)}"
 
 export_btn.on_click(handle_export)
+
+# ── Treemap supplier detail card ──
+def _render_supplier_card(sup_name: str, spend: int, cat_name: str, risk: str) -> str:
+    intel = SUPPLIER_INTEL.get(sup_name, {})
+    risk_color = {"Critical": "#C0392B", "High": "#E67E22", "Medium": "#F1C40F", "Low": "#00A86B"}.get(risk, "#1B2A4A")
+
+    def row(label, value, color="#1B2A4A"):
+        return f"""
+        <tr>
+          <td style="padding:6px 12px 6px 0;color:#6c757d;font-size:12px;white-space:nowrap">{label}</td>
+          <td style="padding:6px 0;color:{color};font-size:13px">{value}</td>
+        </tr>"""
+
+    intel_rows = ""
+    if intel:
+        intel_rows = (
+            row("Contract",    intel.get("contract", "—"))
+          + row("Terms",       intel.get("terms", "—"))
+          + row("Price trend", intel.get("price_trend", "—"), "#C0392B")
+          + row("Discount",    intel.get("discount", "—"), "#00A86B")
+          + row("Risk note",   intel.get("risk", "—"), risk_color)
+        )
+        action_html = f"""
+        <div style="margin-top:12px;padding:12px 16px;background:#EAF6F0;border-left:4px solid #00A86B;border-radius:4px">
+          <div style="font-size:11px;color:#6c757d;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Suggested Action</div>
+          <div style="font-size:13px;color:#1B2A4A;line-height:1.5">{intel.get("action", "")}</div>
+        </div>"""
+    else:
+        intel_rows = (
+            row("Contract",    "Not yet captured")
+          + row("Terms",       "Not yet captured")
+          + row("Price trend", "Not yet captured")
+          + row("Discount",    "Not yet captured")
+          + row("Risk note",   "Not yet captured")
+        )
+        action_html = f"""
+        <div style="margin-top:12px;padding:12px 16px;background:#F8F9FA;border-left:4px solid #DEE2E6;border-radius:4px">
+          <div style="font-size:11px;color:#6c757d;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">⏳ Supplier Intel Pending</div>
+          <div style="font-size:13px;color:#6c757d;line-height:1.5">
+            No procurement intelligence recorded for <strong>{sup_name}</strong> yet.
+            Upload a contract, pricing sheet, or supplier agreement via Icarus to populate this card automatically.
+          </div>
+        </div>"""
+
+    return f"""
+    <div style="margin:12px 0;padding:20px 24px;background:#fff;border:1px solid #DEE2E6;border-radius:8px;
+                border-top:4px solid {risk_color};font-family:Georgia,serif">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:bold;color:#1B2A4A">{sup_name}</div>
+          <div style="font-size:12px;color:#6c757d">{cat_name} &nbsp;·&nbsp;
+            <span style="color:{risk_color};font-weight:600">{risk} Risk</span>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:bold;color:#1B2A4A">€{spend:,}K</div>
+          <div style="font-size:11px;color:#6c757d">estimated spend</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        {intel_rows}
+      </table>
+      {action_html}
+    </div>"""
+
+
+def _get_supplier_signals(sup_name: str, limit: int = 5) -> list:
+    try:
+        conn = sqlite3.connect("clients/default/icarus_memory.db")
+        rows = conn.execute(
+            """SELECT headline, source, published, relevance, impact, action, url
+               FROM signals
+               WHERE (headline LIKE ? OR summary LIKE ?)
+                 AND relevance >= 6
+               ORDER BY timestamp DESC
+               LIMIT ?""",
+            (f"%{sup_name}%", f"%{sup_name}%", limit),
+        ).fetchall()
+        conn.close()
+        return [{"headline": r[0], "source": r[1], "published": r[2],
+                 "relevance": r[3], "impact": r[4], "action": r[5], "url": r[6]}
+                for r in rows]
+    except Exception:
+        return []
+
+
+def _render_news_html(signals: list, sup_name: str) -> str:
+    impact_color = {"positive": "#00A86B", "negative": "#C0392B", "neutral": "#6c757d"}
+    if not signals:
+        return f"""
+        <div style="margin-top:8px;padding:12px 16px;background:#F8F9FA;
+                    border:1px solid #DEE2E6;border-radius:8px;font-family:Georgia,serif">
+          <div style="font-size:11px;color:#6c757d;text-transform:uppercase;
+                      letter-spacing:.05em;margin-bottom:4px">📡 Market Intelligence</div>
+          <div style="font-size:13px;color:#6c757d">
+            No Icarus signals found for <strong>{sup_name}</strong> yet.
+            Click <em>Fetch latest signals</em> to scan live news sources.
+          </div>
+        </div>"""
+    items = ""
+    for s in signals:
+        col   = impact_color.get(s["impact"], "#6c757d")
+        date  = (s["published"] or "")[:10]
+        url   = s["url"] or "#"
+        items += f"""
+        <div style="padding:10px 0;border-bottom:1px solid #F0F0F0">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <a href="{url}" target="_blank"
+               style="font-size:13px;color:#1B2A4A;text-decoration:none;font-weight:600;
+                      flex:1;margin-right:12px;line-height:1.4">{s['headline']}</a>
+            <span style="font-size:11px;color:{col};white-space:nowrap;font-weight:600">
+              {s['impact'].upper()}</span>
+          </div>
+          <div style="font-size:11px;color:#6c757d;margin-top:3px">
+            {s['source']} · {date} · Relevance {s['relevance']}/10
+          </div>
+          {f'<div style="font-size:12px;color:#1B2A4A;margin-top:4px;font-style:italic">{s["action"]}</div>' if s["action"] else ""}
+        </div>"""
+    return f"""
+    <div style="margin-top:8px;padding:16px 20px;background:#fff;
+                border:1px solid #DEE2E6;border-radius:8px;font-family:Georgia,serif">
+      <div style="font-size:11px;color:#6c757d;text-transform:uppercase;
+                  letter-spacing:.05em;margin-bottom:8px">📡 Latest Market Signals — {sup_name}</div>
+      {items}
+    </div>"""
+
+
+def _show_treemap():
+    treemap_frame.objects = [treemap_pane]
+
+
+def _on_treemap_click(*_):
+    cd = treemap_pane.click_data
+    if not cd:
+        return
+    points = cd.get("points", [])
+    if not points:
+        return
+    p = points[0]
+    node_id = p.get("id", "")
+    if "/" not in node_id:
+        return
+    cat_name  = node_id.split("/")[0]
+    raw_label = p.get("label", "")
+    sup_name  = raw_label.split(". ", 1)[-1] if ". " in raw_label else raw_label
+    spend     = int(p.get("value", 0))
+    risk      = p.get("customdata", [None, "Unknown"])[1] if p.get("customdata") else "Unknown"
+    _current_supplier[0] = sup_name
+    signals = _get_supplier_signals(sup_name)
+    supplier_detail.object = _render_supplier_card(sup_name, spend, cat_name, risk)
+    supplier_news.object   = _render_news_html(signals, sup_name)
+    treemap_frame.objects  = [treemap_back, supplier_detail, supplier_news, fetch_signals_btn]
+
+
+def _on_fetch_signals(_):
+    sup_name = _current_supplier[0]
+    if not sup_name:
+        return
+    fetch_signals_btn.name      = "⏳ Scanning…"
+    fetch_signals_btn.disabled  = True
+
+    def _run():
+        try:
+            import icarus as _icarus
+            _icarus.run(client_name=sup_name)
+        except Exception:
+            pass
+        signals = _get_supplier_signals(sup_name)
+        supplier_news.object        = _render_news_html(signals, sup_name)
+        fetch_signals_btn.name      = "🔍 Fetch latest signals"
+        fetch_signals_btn.disabled  = False
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+fetch_signals_btn.on_click(_on_fetch_signals)
+treemap_back.on_click(lambda _: _show_treemap())
+treemap_pane.param.watch(_on_treemap_click, "click_data")
 
 # ── KPI drill-down buttons ──
 ebitda_btn   = pn.widgets.Button(name="💶 EBITDA",    button_type="light", width=130)
