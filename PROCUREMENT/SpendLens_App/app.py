@@ -361,18 +361,29 @@ def chart_spend_stacked(df_spend):
 
 def chart_category_bars(df_meta, year_label="2026E"):
     df = df_meta.sort_values("spend_2026e", ascending=True).copy()
-    over = df["budget_variance"] > 0
-    colors = [RED if o else NAVY for o in over]
-    fig = go.Figure(go.Bar(
-        y=df["category"], x=df["spend_2026e"], orientation="h",
-        marker_color=colors,
-        text=[f"€{v:,.0f}K" for v in df["spend_2026e"]],
+    within  = df[["spend_2026e", "budget_2026e"]].min(axis=1)   # capped at budget
+    excess  = (df["spend_2026e"] - df["budget_2026e"]).clip(lower=0)  # over-budget portion only
+    fig = go.Figure()
+    # Base: spend up to budget (navy)
+    fig.add_trace(go.Bar(
+        y=df["category"], x=within, orientation="h",
+        marker_color=NAVY, name="Within budget",
+        hovertemplate="<b>%{y}</b><br>Within budget: €%{x:,.0f}K<extra></extra>",
+    ))
+    # Overlay: excess only (red)
+    fig.add_trace(go.Bar(
+        y=df["category"], x=excess, orientation="h",
+        marker_color=RED, name="Over budget",
+        text=[f"€{v:,.0f}K" if v > 0 else "" for v in df["spend_2026e"]],
         textposition="outside",
         customdata=df["budget_variance"],
-        hovertemplate="<b>%{y}</b><br>Spend: €%{x:,.0f}K<br>Variance: €%{customdata:,.0f}K<extra></extra>",
+        hovertemplate="<b>%{y}</b><br>Over budget: €%{x:,.0f}K<br>Total spend: €%{customdata:,.0f}K<extra></extra>",
     ))
-    fig.update_layout(title=f"{year_label} Spend vs Budget (red = over budget)",
-                      **LAYOUT, height=420, xaxis_title="Spend (€K)")
+    fig.update_layout(
+        title=f"{year_label} Spend vs Budget (red = over-budget portion)",
+        barmode="stack", **LAYOUT, height=420, xaxis_title="Spend (€K)",
+        showlegend=False,
+    )
     return fig
 
 
