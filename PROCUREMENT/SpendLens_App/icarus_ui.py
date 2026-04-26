@@ -165,6 +165,18 @@ _CSS = """
 .empty-msg{display:none;text-align:center;padding:2rem 1rem;font-size:13px;color:#bbb;}
 .empty-msg.visible{display:block;}
 
+/* Document section */
+.doc-section-title{font-size:11px;font-weight:700;color:#555;text-transform:uppercase;
+  letter-spacing:0.8px;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.doc-item{display:flex;align-items:center;gap:8px;padding:5px 0;
+  border-bottom:1px solid #f5f5f5;}
+.doc-item:last-child{border-bottom:none;}
+.doc-icon{font-size:14px;flex-shrink:0;}
+.doc-name{font-size:12px;color:#333;font-weight:500;flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.doc-meta{font-size:11px;color:#bbb;white-space:nowrap;flex-shrink:0;}
+.doc-empty{font-size:12px;color:#bbb;font-style:italic;padding:4px 0;}
+
 /* Query result box */
 .query-result-box{background:#F0F7FF;border:1.5px solid #378ADD;border-radius:10px;
   padding:14px 16px;margin-bottom:4px;}
@@ -614,6 +626,16 @@ class IcarusPanel(param.Parameterized):
         self._header_pane  = pn.pane.HTML(_build_header_html(),  sizing_mode="stretch_width")
         self._cards_pane   = pn.pane.HTML(_build_cards_html(),   sizing_mode="stretch_width")
         self._result_pane  = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
+        # Document store UI
+        self._doc_list     = pn.Column(sizing_mode="stretch_width")
+        self._doc_status   = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
+        self._file_input   = pn.widgets.FileInput(
+            accept=".pdf,.docx,.txt,.csv,.xlsx",
+            multiple=True,
+            name="",
+            sizing_mode="stretch_width",
+        )
+        self._refresh_doc_list()
 
     def _set_loading(self, loading: bool):
         self._loading = loading
@@ -661,6 +683,8 @@ class IcarusPanel(param.Parameterized):
             self._run_query(self._last_query)
 
     def _run_query(self, query: str):
+        doc_ctx = self._get_doc_context()
+
         def _do():
             self._set_loading(True)
             self._result_pane.object  = _build_query_loading_html(query)
@@ -670,6 +694,7 @@ class IcarusPanel(param.Parameterized):
                     query=query,
                     client_categories=self.client_categories,
                     client_name=self.client_name,
+                    doc_context=doc_ctx or None,
                 )
                 self._result_pane.object = _build_query_result_html(
                     query, result.get("answer", "No response received.")
@@ -690,6 +715,8 @@ class IcarusPanel(param.Parameterized):
         threading.Thread(target=_do, daemon=True).start()
 
     def _run_rfp(self, query: str):
+        doc_ctx = self._get_doc_context()
+
         def _do():
             self._set_loading(True)
             self._result_pane.object  = _build_rfp_loading_html(query)
@@ -699,6 +726,7 @@ class IcarusPanel(param.Parameterized):
                     query=query,
                     client_categories=self.client_categories,
                     client_name=self.client_name,
+                    doc_context=doc_ctx or None,
                 )
                 self._result_pane.object = _build_rfp_html(data, query)
             except Exception as e:
@@ -737,6 +765,97 @@ class IcarusPanel(param.Parameterized):
                 self._loading = False
 
         threading.Thread(target=_do, daemon=True).start()
+
+    # ── Document helpers ──────────────────────────────────────────────────────
+
+    def _refresh_doc_list(self):
+        """Rebuild the document list Panel column from the DB."""
+        docs = icarus.get_documents(limit=20)
+        self._doc_list.clear()
+        if not docs:
+            self._doc_list.append(
+                pn.pane.HTML(f'{_CSS}<div class="doc-empty">No documents uploaded yet.</div>',
+                             sizing_mode="stretch_width")
+            )
+            return
+        for doc in docs:
+            ext  = (doc.get("content_type") or "file").upper()
+            icon = {"PDF": "📄", "DOCX": "📝", "TXT": "📃",
+                    "CSV": "📊", "XLSX": "📊"}.get(ext, "📎")
+            kc   = f"{doc['char_count']:,}" if doc.get("char_count") else "?"
+            date = _fmt_date(doc.get("uploaded_at", ""))
+            del_btn = pn.widgets.Button(
+                name="×", width=28, height=28,
+                button_type="light",
+                stylesheets=[".bk-btn{padding:0;font-size:14px;color:#aaa;"
+                              "border:none;background:none;cursor:pointer;}"
+                              ".bk-btn:hover{color:#E24B4A;}"],
+            )
+            del_btn.on_click(lambda e, did=doc["id"], fn=doc["filename"]:
+                             self._delete_doc(did, fn))
+            self._doc_list.append(pn.Row(
+                pn.pane.HTML(
+                    f'{_CSS}<div class="doc-item">'
+                    f'<span class="doc-icon">{icon}</span>'
+                    f'<span class="doc-name" title="{doc["filename"]}">{doc["filename"]}</span>'
+                    f'<span class="doc-meta">{kc} chars &middot; {date}</span>'
+                    f'</div>',
+                    sizing_mode="stretch_width",
+                ),
+                del_btn,
+                align="center", sizing_mode="stretch_width",
+            ))
+
+    def _upload_docs(self):
+        """Handle FileInput upload — extract text and save to DB."""
+        if not self._file_input.value:
+            return
+        values    = self._file_input.value
+        filenames = self._file_input.filename
+        # Normalise to lists (FileInput gives single value when multiple=False)
+        if not isinstance(values, list):
+            values, filenames = [values], [filenames]
+
+        uploaded, errors = [], []
+        for content, filename in zip(values, filenames):
+            try:
+                text = icarus.extract_text(filename, content)
+                ext  = filename.lower().rsplit(".", 1)[-1] if "." in filename else "txt"
+                icarus.save_document(filename, text, ext)
+                uploaded.append(filename)
+            except Exception as e:
+                errors.append(f"{filename}: {e}")
+                print(f"[IcarusPanel] upload error: {e}")
+
+        self._refresh_doc_list()
+        if uploaded:
+            self._doc_status.object = (
+                f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:4px 0;">'
+                f'✓ Uploaded: {", ".join(uploaded)}</div>'
+            )
+        if errors:
+            self._doc_status.object += (
+                f'<div style="font-size:11px;color:#E24B4A;padding:2px 0;">'
+                f'⚠ Errors: {"; ".join(errors)}</div>'
+            )
+        self._doc_status.visible = True
+        # Clear the input for next upload
+        self._file_input.value    = None
+        self._file_input.filename = None
+
+    def _delete_doc(self, doc_id: int, filename: str):
+        """Delete a document from the store and refresh the list."""
+        icarus.delete_document(doc_id)
+        self._doc_status.object  = (
+            f'{_CSS}<div style="font-size:11px;color:#888;padding:4px 0;">'
+            f'Removed: {filename}</div>'
+        )
+        self._doc_status.visible = True
+        self._refresh_doc_list()
+
+    def _get_doc_context(self) -> list:
+        """Return document excerpts for use in Claude prompts (empty list if none)."""
+        return icarus.get_document_texts(limit=5, chars_per_doc=4000)
 
     def load_recent(self):
         self._signals = icarus.get_recent_signals(limit=50)
@@ -823,12 +942,48 @@ class IcarusPanel(param.Parameterized):
                     "border-bottom": "1px solid #f0f0f0", "gap": "10px"},
         )
 
+        # ── Document upload section ───────────────────────────────────────────
+        upload_btn = pn.widgets.Button(
+            name="Upload",
+            button_type="default",
+            stylesheets=["""
+                .bk-btn{height:32px;padding:0 14px;border-radius:8px;
+                  font-size:12px;font-weight:600;white-space:nowrap;
+                  border:1.5px solid #534AB7;color:#534AB7;background:white;
+                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+                .bk-btn:hover{background:#EEEDFE;}
+            """],
+        )
+        upload_btn.on_click(lambda e: self._upload_docs())
+
+        doc_section = pn.Column(
+            pn.pane.HTML(
+                f'{_CSS}<div class="doc-section-title">📎 Documents'
+                '<span style="font-size:10px;font-weight:400;color:#aaa;margin-left:6px;">'
+                'Upload contracts, pricing sheets, or agreements — Icarus will reference them in negotiations</span>'
+                '</div>',
+                sizing_mode="stretch_width",
+            ),
+            pn.Row(
+                self._file_input,
+                upload_btn,
+                align="center", sizing_mode="stretch_width",
+                styles={"gap": "8px"},
+            ),
+            self._doc_status,
+            self._doc_list,
+            sizing_mode="stretch_width",
+            styles={"padding": "10px 18px 12px", "background": "#fafcff",
+                    "border-bottom": "1px solid #f0f0f0"},
+        )
+
         enter_key = pn.pane.HTML(_ENTER_KEY_HTML, height=0, margin=0)
 
         return pn.Column(
             self._header_pane,
             input_row,
             action_row,
+            doc_section,
             enter_key,
             self._result_pane,
             self._cards_pane,

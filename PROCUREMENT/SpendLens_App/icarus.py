@@ -175,6 +175,17 @@ def init_db():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            uploaded_at  TEXT NOT NULL,
+            filename     TEXT NOT NULL,
+            content_type TEXT,               -- 'pdf' | 'docx' | 'txt' | 'csv' | 'xlsx'
+            raw_text     TEXT NOT NULL,
+            char_count   INTEGER
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -273,6 +284,111 @@ def get_recent_signals(limit=20):
     rows = [dict(zip(cols, row)) for row in c.fetchall()]
     conn.close()
     return rows
+
+
+# ── Document store ───────────────────────────────────────────────────────────
+
+def extract_text(filename: str, content: bytes) -> str:
+    """
+    Extract plain text from uploaded file bytes.
+    Supports PDF (pypdf), DOCX (python-docx), XLSX (pandas), TXT/CSV (utf-8).
+    """
+    import io
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else "txt"
+
+    if ext in ("txt", "csv", "md"):
+        return content.decode("utf-8", errors="replace")
+
+    if ext == "pdf":
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise ImportError("pypdf not installed — run: pip install pypdf")
+        reader = PdfReader(io.BytesIO(content))
+        pages = [p.extract_text() or "" for p in reader.pages]
+        return "\n\n".join(t for t in pages if t.strip())
+
+    if ext == "docx":
+        try:
+            from docx import Document
+        except ImportError:
+            raise ImportError("python-docx not installed — run: pip install python-docx")
+        doc = Document(io.BytesIO(content))
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
+    if ext in ("xlsx", "xls"):
+        import pandas as pd
+        df = pd.read_excel(io.BytesIO(content))
+        return df.to_string(index=False)
+
+    return content.decode("utf-8", errors="replace")
+
+
+def save_document(filename: str, raw_text: str, content_type: str = "txt") -> int:
+    """Persist an uploaded document; return its new ID."""
+    init_db()
+    conn = sqlite3.connect(ICARUS_DB)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO documents (uploaded_at, filename, content_type, raw_text, char_count) "
+        "VALUES (?,?,?,?,?)",
+        (datetime.now(timezone.utc).isoformat(), filename, content_type,
+         raw_text, len(raw_text)),
+    )
+    doc_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    print(f"[Icarus] Saved document #{doc_id}: {filename} ({len(raw_text):,} chars)")
+    return doc_id
+
+
+def get_documents(limit: int = 20) -> list:
+    """Return metadata for recently uploaded documents (no raw_text)."""
+    init_db()
+    conn = sqlite3.connect(ICARUS_DB)
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, uploaded_at, filename, content_type, char_count "
+        "FROM documents ORDER BY uploaded_at DESC LIMIT ?",
+        (limit,),
+    )
+    cols = ["id", "uploaded_at", "filename", "content_type", "char_count"]
+    rows = [dict(zip(cols, row)) for row in c.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_document_texts(limit: int = 5, chars_per_doc: int = 4000) -> list:
+    """
+    Return a list of formatted document excerpts ready to embed in a prompt.
+    Each entry: '[filename]\n<text excerpt>'
+    """
+    init_db()
+    conn = sqlite3.connect(ICARUS_DB)
+    c = conn.cursor()
+    c.execute(
+        "SELECT filename, raw_text FROM documents ORDER BY uploaded_at DESC LIMIT ?",
+        (limit,),
+    )
+    rows = c.fetchall()
+    conn.close()
+    result = []
+    for filename, raw_text in rows:
+        excerpt = raw_text[:chars_per_doc]
+        if len(raw_text) > chars_per_doc:
+            excerpt += f"\n[… truncated — {len(raw_text):,} chars total]"
+        result.append(f"[{filename}]\n{excerpt}")
+    return result
+
+
+def delete_document(doc_id: int):
+    """Delete a document from the store by ID."""
+    conn = sqlite3.connect(ICARUS_DB)
+    c = conn.cursor()
+    c.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+    conn.commit()
+    conn.close()
+    print(f"[Icarus] Deleted document #{doc_id}")
 
 
 # ── Scraping ──────────────────────────────────────────────────────────────────
@@ -389,7 +505,8 @@ Articles:
 
 # ── Targeted query ────────────────────────────────────────────────────────────
 
-def query_with_claude(query: str, client_categories: list, client_name: str = "Client") -> dict:
+def query_with_claude(query: str, client_categories: list, client_name: str = "Client",
+                      doc_context: list = None) -> dict:
     """
     Answer a specific procurement question using recent signals + fresh articles.
     Returns {"answer": str, "signals": list}.
@@ -411,14 +528,22 @@ def query_with_claude(query: str, client_categories: list, client_name: str = "C
         for a in articles[:25]
     )
 
+    doc_section = ""
+    if doc_context:
+        doc_section = "\n\nUploaded contracts / documents (reference these directly):\n"
+        for i, doc in enumerate(doc_context, 1):
+            doc_section += f"\n--- Document {i} ---\n{doc}\n"
+
     prompt = (
         f"You are Icarus, a procurement intelligence agent for SpendLens.\n\n"
         f"Client: {client_name}\n"
         f"Spend categories: {', '.join(client_categories)}\n\n"
-        f"User question: {query}\n\n"
+        f"User question: {query}\n"
+        f"{doc_section}\n"
         f"Stored signals (context):\n{ctx}\n\n"
         f"Recent headlines:\n{art_text}\n\n"
         "Answer the question in 3-5 sentences with concrete recommendations for the procurement team. "
+        "Where documents are provided, reference specific clauses or figures. "
         "Then return the 3-5 most relevant signals.\n\n"
         "Return ONLY valid JSON, no markdown, no extra text:\n"
         '{"answer": "...", "signals": [{"headline": "...", "category": "...", '
@@ -524,7 +649,8 @@ Return ONLY valid JSON (no markdown, no extra text):
 
 # ── RFP / negotiation brief ───────────────────────────────────────────────────
 
-def generate_rfp_brief(query: str, client_categories: list, client_name: str = "Client") -> dict:
+def generate_rfp_brief(query: str, client_categories: list, client_name: str = "Client",
+                       doc_context: list = None) -> dict:
     """
     Generate a structured procurement negotiation brief / RFP preparation.
     Detects topic from query, uses stored signals as market context.
@@ -540,15 +666,21 @@ def generate_rfp_brief(query: str, client_categories: list, client_name: str = "
         for s in recent
     ) if recent else "No stored signals."
 
+    doc_section = ""
+    if doc_context:
+        doc_section = "\n\nUploaded contracts / documents (treat as primary reference — extract specific terms, prices, clauses):\n"
+        for i, doc in enumerate(doc_context, 1):
+            doc_section += f"\n--- Document {i} ---\n{doc}\n"
+
     prompt = f"""You are Icarus, a senior procurement intelligence agent for SpendLens.
 Client: {client_name}
 Spend Categories: {', '.join(client_categories)}
 Request: {query}
-
-Based on current market signals, prepare a procurement negotiation brief and RFP preparation document.
-
-Market Intelligence Context:
+{doc_section}
+Market intelligence context (current signals from news sources):
 {ctx}
+
+Based on the uploaded documents (where provided) and current market signals, prepare a detailed procurement negotiation brief and RFP preparation. Reference specific contract terms, prices, or clauses from the documents where relevant.
 
 Return ONLY valid JSON (no markdown, no extra text):
 {{
