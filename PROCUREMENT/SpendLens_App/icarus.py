@@ -356,14 +356,22 @@ def fetch_articles(client_categories):
         except Exception as e:
             print(f"[Icarus] Feed error ({feed_cfg['name']}): {e}")
 
-    # Deduplicate by headline (same story picked up by multiple feeds)
-    seen_headlines: set = set()
+    # Deduplicate by URL first, then headline — same story often appears in multiple feeds
+    seen_urls: set = set()
+    seen_heads: set = set()
     unique: list = []
     for a in articles:
-        key = a["headline"].strip().lower()
-        if key and key not in seen_headlines:
-            seen_headlines.add(key)
-            unique.append(a)
+        url  = (a.get("url") or "").strip()
+        head = a.get("headline", "").strip().lower()
+        if url and url in seen_urls:
+            continue
+        if head and head in seen_heads:
+            continue
+        if url:
+            seen_urls.add(url)
+        if head:
+            seen_heads.add(head)
+        unique.append(a)
     return unique
 
 
@@ -673,14 +681,25 @@ def run(client_categories=None, client_name="Client"):
 
     # 2. Analyze with Claude
     signals = analyze_with_claude(articles, client_categories, client_name)
-    # Deduplicate signals by headline
-    seen_sig: set = set()
+    # Deduplicate by URL first (canonical), then by normalised headline as fallback.
+    # Claude sometimes rephrases headlines slightly, so headline-only dedup misses dupes.
+    seen_urls: set = set()
+    seen_heads: set = set()
     deduped: list = []
     for s in signals:
-        key = s.get("headline", "").strip().lower()
-        if key and key not in seen_sig:
-            seen_sig.add(key)
-            deduped.append(s)
+        url  = (s.get("url") or "").strip()
+        head = s.get("headline", "").strip().lower()
+        url_key  = url  if url  else None
+        head_key = head if head else None
+        if url_key and url_key in seen_urls:
+            continue
+        if head_key and head_key in seen_heads:
+            continue
+        if url_key:
+            seen_urls.add(url_key)
+        if head_key:
+            seen_heads.add(head_key)
+        deduped.append(s)
     signals = deduped
     print(f"[Icarus] Extracted {len(signals)} signals (after dedup)")
 
