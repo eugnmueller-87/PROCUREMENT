@@ -21,8 +21,8 @@ Priority: 🔴 High · 🟡 Medium · 🟢 Nice-to-have
 |-----|------|-------|
 | 🔴 | **Dataset label shows "Default" correctly** | After file upload, label shows filename. Default dataset label reads empty. Fix: set `dataset_label.object = "**Dataset:** Default"` in initial render. |
 | 🔴 | **Run startup with UTF-8 always** | Currently requires `PYTHONUTF8=1` env var. Add `# -*- coding: utf-8 -*-` or set `PYTHONIOENCODING=utf-8` in a `.env` / launch script so `panel serve app.py` works without flags. |
-| 🟡 | **Drill-down from Risk Map bubble** | Clicking a bubble on the risk scatter chart should show the category's supplier list and contract detail in `drill_panel`. |
-| 🟡 | **Deep Dive tab: supplier-level table** | Add a Tabulator below the charts showing individual vendor rows with flags for the selected year. |
+| 🟡 | **Drill-down from Risk Map bubble** | Clicking a bubble on the risk scatter chart should show the category's supplier list and contract detail. Treemap drill-down (Deep Dive) is live; Risk Map click still not wired. |
+| 🟡 | **Deep Dive tab: supplier-level table** | Treemap + supplier card now live (2026-04-26). Remaining: Tabulator below the charts showing individual vendor rows with flags for the selected year. |
 | 🟡 | **Upload error UX** | Pipeline errors show in `status_log` as plain text. Add a red banner or modal for critical failures. |
 | 🟢 | **Icarus Tab label** | Currently `"🪶 Icarus"`. Consider renaming to `"🪶 Market Intel"` to match the sidebar ICARUS section label. |
 | 🟢 | **CFO Report download in-place** | Currently appends a download widget to `sidebar_col` after export. Replace with a proper download button that replaces itself after click. |

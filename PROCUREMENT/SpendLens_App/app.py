@@ -1506,7 +1506,7 @@ icarus_panel = IcarusPanel(
     client_categories=list(df_meta["category"].dropna().unique()),
     client_name="Client"
 )
-icarus_panel.load_recent()
+pn.state.onload(icarus_panel.load_recent)
 
 def handle_icarus(event):
     status_log.object = "🪶 Icarus crawl started — check the Icarus tab for results..."

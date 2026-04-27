@@ -8,6 +8,8 @@ import sqlite3
 import feedparser
 import json
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -344,44 +346,46 @@ def extract_text(filename: str, content: bytes) -> str:
 def fetch_articles(client_categories):
     """
     Fetch articles from RSS feeds relevant to client's spend categories.
-    Returns list of dicts: {source, headline, summary, url, categories}
+    All feeds are fetched in parallel. Returns deduplicated list of article dicts.
     """
-    articles = []
     client_cat_set = set(client_categories)
 
-    for feed_cfg in RSS_SOURCES:
-        # Only fetch from sources that overlap with client's categories
+    def _fetch_feed(feed_cfg):
         relevant = client_cat_set.intersection(set(feed_cfg["categories"]))
         if not relevant:
-            continue
-
+            return []
         try:
             feed = feedparser.parse(
                 feed_cfg["url"],
                 agent="Mozilla/5.0 (compatible; SpendLens/1.0; procurement intelligence)"
             )
-            if not feed.entries:
-                continue
-            for entry in feed.entries[:10]:  # max 10 per source
-                    # extract publish date
-                    pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
-                    if pub_parsed:
-                        from datetime import datetime as _dt
-                        pub_str = _dt(*pub_parsed[:6], tzinfo=timezone.utc).isoformat()
-                    else:
-                        pub_str = datetime.now(timezone.utc).isoformat()
-                    articles.append({
-                        "source": feed_cfg["name"],
-                        "headline": entry.get("title", ""),
-                        "summary": entry.get("summary", entry.get("description", ""))[:500],
-                        "url": entry.get("link", ""),
-                        "relevant_categories": list(relevant),
-                        "published": pub_str,
-                    })
+            results = []
+            for entry in feed.entries[:10]:
+                pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+                if pub_parsed:
+                    pub_str = datetime(*pub_parsed[:6], tzinfo=timezone.utc).isoformat()
+                else:
+                    pub_str = datetime.now(timezone.utc).isoformat()
+                results.append({
+                    "source": feed_cfg["name"],
+                    "headline": entry.get("title", ""),
+                    "summary": entry.get("summary", entry.get("description", ""))[:500],
+                    "url": entry.get("link", ""),
+                    "relevant_categories": list(relevant),
+                    "published": pub_str,
+                })
+            return results
         except Exception as e:
             print(f"[Icarus] Feed error ({feed_cfg['name']}): {e}")
+            return []
 
-    # Deduplicate by URL first, then headline — same story often appears in multiple feeds
+    # Fetch all feeds in parallel
+    articles = []
+    with ThreadPoolExecutor(max_workers=len(RSS_SOURCES)) as executor:
+        for feed_articles in executor.map(_fetch_feed, RSS_SOURCES):
+            articles.extend(feed_articles)
+
+    # Deduplicate by URL first, then headline
     seen_urls: set = set()
     seen_heads: set = set()
     unique: list = []
@@ -402,61 +406,68 @@ def fetch_articles(client_categories):
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 
+_ANALYSIS_BATCH_SIZE = 15  # articles per Claude call
+_ANALYSIS_WORKERS    = 5   # parallel Claude calls
+
+def _analyze_batch(batch, client_categories, client_name):
+    """Analyze a single batch of articles with Haiku (fast, structured extraction)."""
+    articles_text = "\n\n".join(
+        f"SOURCE: {a['source']}\nDATE: {a.get('published','')[:10]}\n"
+        f"HEADLINE: {a['headline']}\nSUMMARY: {a['summary']}\n"
+        f"URL: {a['url']}\nCATEGORIES: {', '.join(a['relevant_categories'])}"
+        for a in batch
+    )
+    prompt = (
+        f"You are Icarus, a procurement intelligence agent.\n"
+        f"Client spend categories: {', '.join(client_categories)}\n\n"
+        "Analyze each article below. For each one relevant to procurement decisions, "
+        "return a signal. Skip irrelevant articles.\n\n"
+        "Return ONLY a JSON array. Each object must have:\n"
+        '"source", "headline", "summary" (2-3 sentences on procurement impact), '
+        '"category" (from client list), "relevance" (1-10 int), '
+        '"impact" ("positive"|"negative"|"neutral"), "action" (one concrete action), '
+        '"url", "published" (YYYY-MM-DD)\n\n'
+        f"Articles:\n{articles_text}"
+    )
+    try:
+        client = Anthropic()
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _parse_json(resp.content[0].text.strip())
+    except Exception as e:
+        print(f"[Icarus] batch analysis error: {e}")
+        return []
+
+
 def analyze_with_claude(articles, client_categories, client_name="the client"):
     """
-    Send articles to Claude API for relevance scoring and signal extraction.
-    Returns structured list of signals.
+    Batch articles into groups of _ANALYSIS_BATCH_SIZE and analyze all batches
+    in parallel using Haiku. ~5x faster than a single sequential Sonnet call.
     """
     if not articles:
         return []
 
-    client = Anthropic()
+    batches = [articles[i:i + _ANALYSIS_BATCH_SIZE]
+               for i in range(0, len(articles), _ANALYSIS_BATCH_SIZE)]
 
-    articles_text = "\n\n".join([
-        f"SOURCE: {a['source']}\nDATE: {a.get('published','')[:10]}\nHEADLINE: {a['headline']}\nSUMMARY: {a['summary']}\nURL: {a['url']}\nCATEGORIES: {', '.join(a['relevant_categories'])}"
-        for a in articles
-    ])
+    all_signals = []
+    with ThreadPoolExecutor(max_workers=_ANALYSIS_WORKERS) as executor:
+        futures = {
+            executor.submit(_analyze_batch, batch, client_categories, client_name): i
+            for i, batch in enumerate(batches)
+        }
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                if isinstance(result, list):
+                    all_signals.extend(result)
+            except Exception as e:
+                print(f"[Icarus] batch future error: {e}")
 
-    prompt = f"""You are Icarus, a procurement intelligence agent for SpendLens.
-
-The client ({client_name}) has spend in these categories: {', '.join(client_categories)}
-
-Below are recent news articles. Analyze each one and extract procurement signals.
-
-For each article that is genuinely relevant to procurement decisions, return a signal.
-Skip articles that are not relevant to procurement or cost management.
-
-Return ONLY a JSON array (no markdown, no preamble). Each signal object must have:
-- "source": string — news source name
-- "headline": string — original headline
-- "summary": string — 2-3 sentence summary focused on procurement impact
-- "category": string — the most relevant spend category from the client's list
-- "relevance": integer 1-10 — how actionable is this for procurement?
-- "impact": string — "positive", "negative", or "neutral" (for procurement costs/risk)
-- "action": string — one concrete suggested action for the procurement team
-- "url": string — article URL
-- "published": string — article date (YYYY-MM-DD)
-
-Articles:
-{articles_text}"""
-
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = response.content[0].text.strip()
-        # Strip markdown fences if present
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        signals = json.loads(raw.strip())
-        return signals if isinstance(signals, list) else []
-    except Exception as e:
-        print(f"[Icarus] Claude API error: {e}")
-        return []
+    return all_signals
 
 
 # ── Targeted query ────────────────────────────────────────────────────────────

@@ -109,7 +109,7 @@ Icarus monitors RSS feeds from Reuters, The Register, Handelsblatt, DatacenterDy
 
 **What Icarus does:**
 
-- **On-demand RSS scan** — Fetches and deduplicates articles across 9 curated sources, scores each for procurement relevance (1–10), classifies impact as positive/negative/neutral, and suggests a concrete action. Results are grouped by spend category in a collapsible card view.
+- **On-demand RSS scan** — Fetches and deduplicates articles across 9 curated sources in parallel (~2s), then analyzes them in concurrent batches using Claude Haiku for extraction. Full scan completes in ~8s vs. 45s previously. Results are grouped by spend category in a collapsible card view.
 - **Ask Icarus** — Natural language queries against current signals + live article context. Ask *"What are the risks in cloud spend this week?"* and get a structured answer with supporting signals.
 - **RFP & Negotiation Prep** — Type *"RFP"*, *"negotiation"*, or *"tender"* in any query to generate a structured negotiation brief: market context, leverage points, key requirements, risk areas, suggested contract terms, and next steps — built from real market signals.
 - **Weekly Intelligence Brief** — One click generates an executive summary of the past 7 days: top risks, opportunities, priority actions, and per-category highlights.
@@ -153,6 +153,19 @@ Requires Python 3.11+ and the packages in `requirements.txt`.
 
 ---
 
+## Recent Updates
+
+**April 2026**
+- **Icarus 5x speed improvement** — RSS feeds now fetched in parallel (9 simultaneous connections); article analysis split into concurrent batches using Claude Haiku; full scan ~8s vs. 45s before
+- **Icarus signals load on startup** — dashboard now shows cached signals immediately when the page opens, without needing to click Scan
+- Risk & Bottlenecks chart redesigned — log-scale axis, enlarged bubbles, total spend badge; Cloud & Compute no longer dominates the visual
+- Deep Dive treemap now shows top suppliers inside each category tile; click a supplier to open a procurement intel card (contract type, payment terms, price trend, discount, suggested action)
+- Market signals panel wired into supplier cards — pulls live Icarus signals for the selected supplier; one-click RSS refresh filtered to that vendor (~5s, no API cost)
+- Spend comparison chart replaces the fixed CAGR bar — pick any start/end year, see per-category growth as a stacked navy/blue bar sorted by size
+- Capex/Opex rebuilt as a multi-year stacked bar showing all five years side by side
+
+---
+
 ## Status
 
 SpendLens is in active development, built as part of the Ironhack AI Bootcamp and extended as a serious procurement intelligence product.
@@ -163,12 +176,26 @@ SpendLens is in active development, built as part of the Ironhack AI Bootcamp an
 | Data cleanup engine | ✅ Complete |
 | Category mapper (chunked + cached) | ✅ Complete |
 | Flag engine | ✅ Complete |
+| CFO Excel export | ✅ Complete |
+| Dashboard — year-aware charts (all tabs) | ✅ Complete |
+| Dashboard — Risk Map (log-scale, bubbles, spend badge) | ✅ Complete |
+| Dashboard — Treemap with supplier drill-down | ✅ Complete |
+| Dashboard — Supplier intel cards & market signals | ✅ Complete |
+| Dashboard — Interactive spend comparison chart | ✅ Complete |
+| Dashboard — Capex/Opex multi-year stacked bar | ✅ Complete |
 | Icarus — RSS signal scanner | ✅ Live |
 | Icarus — Ask / query mode | ✅ Live |
 | Icarus — RFP & negotiation prep | ✅ Live |
 | Icarus — Weekly intelligence brief | ✅ Live |
+| Icarus — Document upload (in-memory) | ✅ Live |
+| Icarus — Signal deduplication | ✅ Live |
+| Icarus — Parallel fetch & batch analysis (5x faster) | ✅ Live |
+| Icarus — Signals load on dashboard startup | ✅ Live |
 | Icarus — Feedback learning loop | 🔨 In progress |
-| Multi-source PO merger | 📋 Planned |
+| Compliance Scorecard tab | 📋 Planned |
+| Spend Variance Analysis | 📋 Planned |
+| Supplier Risk Score | 📋 Planned |
+| Spend Forecast (Q+1) | 📋 Planned |
 | Multi-client support | 📋 Planned |
 
 ---

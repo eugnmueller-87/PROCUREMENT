@@ -43,11 +43,12 @@ vendor name, total spend YTD, contract Y/N, PO Y/N, number of invoices, cost cen
 
 ## Tier 2 — High value, medium effort (3–5 days)
 
-### 5. Icarus Feedback Learning Loop 💡
+### 5. Icarus Feedback Learning Loop 🔨
 **What:** The `record_feedback()` function already updates `category_weights` in the DB.
 Missing piece: feed those weights into the weekly brief prompt and `analyze_with_claude` relevance filter so Icarus learns which categories the user cares about over time.  
 **Extends:** `icarus.py` — `weekly_summary()` + `analyze_with_claude()` prompt construction  
-**Why:** Currently feedback is stored but never used; closing the loop makes Icarus meaningfully smarter.
+**Why:** Currently feedback is stored but never used; closing the loop makes Icarus meaningfully smarter.  
+**Note (2026-04-26):** Icarus signals now surface inline in the Deep Dive supplier card via a fast RSS-only fetch panel. Feedback wiring still open.
 
 ---
 
