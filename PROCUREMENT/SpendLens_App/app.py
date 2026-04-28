@@ -34,7 +34,11 @@ from modules.flag_engine     import run_flag_engine
 from modules.database        import (init_database, get_connection, log_upload,
                                       insert_raw_transactions, insert_enriched_transactions,
                                       bulk_upsert_vendors, get_full_transaction_view)
-from modules.cfo_reports     import export_cfo_excel
+from modules.cfo_reports        import export_cfo_excel
+from modules.supplier_profiler import (
+    compute_and_save_profiles, get_supplier_profiles, build_demo_profiles,
+    update_supplier_field, TAXONOMY, RELATIONSHIP_OPTIONS,
+)
 
 # ── Initialize database ──────────────────────────────────────────────────────
 init_database("default")
@@ -1261,9 +1265,17 @@ def run_pipeline(filename: str, file_bytes: bytes,
         conn.close()
         status_callback(f"💾 Saved to knowledge base")
 
-        # Step 7: Update dashboard
+        # Step 7: Supplier profiles — ABC tiers + compliance scores
+        status_callback("🏆 Computing supplier ABC tiers...")
+        conn = get_connection("default")
+        compute_and_save_profiles(conn, "default")
+        conn.close()
+        status_callback("🏆 Supplier profiles updated")
+
+        # Step 8: Update dashboard
         status_callback("📊 Updating dashboard...")
         dashboard_callback(flagged_df, filename)
+        refresh_compliance_tab()
         status_callback(f"✅ **Done** — {len(flagged_df)} rows processed from **{filename}**")
 
     except Exception as e:
@@ -1400,6 +1412,299 @@ def refresh_all_insights():
     insight_treemap.object     = _build_insight_html("treemap")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPLIANCE SCORECARD TAB
+# ─────────────────────────────────────────────────────────────────────────────
+
+_RISK_BADGE  = {"Critical": RED, "High": YELLOW, "Medium": "#E67E22", "Low": GREEN}
+
+# Holds the current supplier DataFrame shown in the tab
+_sc_df: pd.DataFrame = build_demo_profiles()
+
+# Panes updated by refresh functions
+_sc_score_pane  = pn.pane.HTML("", sizing_mode="stretch_width")
+_sc_table_pane  = pn.Column(sizing_mode="stretch_width")
+_sc_maverick_pane = pn.pane.Plotly(sizing_mode="stretch_width", config=_NO_MODEBAR)
+_sc_expiry_pane   = pn.pane.Plotly(sizing_mode="stretch_width", config=_NO_MODEBAR)
+
+# Active tier filter ("All", "A", "B", "C")
+_sc_tier_filter = pn.widgets.ToggleGroup(
+    name="", options=["All", "A", "B", "C"], value="All",
+    behavior="radio", button_type="light",
+    stylesheets=["""
+        :host{margin:0;}
+        .bk-btn-group{display:flex;gap:6px;}
+        .bk-btn{height:28px;padding:0 14px;border-radius:99px;font-size:12px;
+                font-weight:600;border:1.5px solid #D0DAF0;color:#1B3A6B;
+                background:white;font-family:-apple-system,sans-serif;}
+        .bk-btn.bk-active{background:#1B3A6B;color:white;border-color:#1B3A6B;}
+    """],
+)
+
+
+def _sc_overall_score(df: pd.DataFrame) -> dict:
+    """Compute org-level compliance dimensions from the supplier DataFrame."""
+    if df.empty:
+        return {"score": 0, "po": 0, "cc": 0, "maverick": 12, "spm": 0}
+    # Weight dimensions by tier: A=3, B=2, C=1
+    w_map = {"A": 3, "B": 2, "C": 1}
+    weights = df["tier"].map(w_map).fillna(1)
+    po  = round((df["po_coverage_pct"] * weights).sum() / weights.sum())
+    cc_num = df["contract_status"].map(
+        {"Under Contract": 100, "Expired": 40, "No Contract": 0, "Unknown": 50}
+    ).fillna(50)
+    cc  = round((cc_num * weights).sum() / weights.sum())
+    sc  = round((df["compliance_score"] * weights).sum() / weights.sum())
+    return {"score": sc, "po": po, "cc": cc}
+
+
+def _build_sc_score_html(df: pd.DataFrame) -> str:
+    dims = _sc_overall_score(df)
+    sc   = dims["score"]
+    band = ("World-class" if sc >= 85 else "Improving" if sc >= 70
+            else "At Risk" if sc >= 50 else "Critical")
+    color = GREEN if sc >= 85 else NAVY2 if sc >= 70 else YELLOW if sc >= 50 else RED
+    tier_counts = df["tier"].value_counts().to_dict()
+    a_cnt = tier_counts.get("A", 0)
+    b_cnt = tier_counts.get("B", 0)
+    c_cnt = tier_counts.get("C", 0)
+    return f"""
+<div style="background:{NAVY};border-radius:12px;padding:20px 28px;
+            display:flex;align-items:center;gap:32px;flex-wrap:wrap;
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="display:flex;flex-direction:column;align-items:center;min-width:90px;">
+    <div style="font-size:48px;font-weight:800;color:{color};line-height:1;">{sc:.0f}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">/ 100</div>
+    <div style="font-size:12px;font-weight:700;color:{color};margin-top:4px;">{band}</div>
+  </div>
+  <div style="flex:1;display:flex;gap:24px;flex-wrap:wrap;">
+    <div style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:white;">{dims['po']}%</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;">PO Coverage</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:white;">{dims['cc']}%</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;">Contract Coverage</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:white;">{a_cnt}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;">A Suppliers</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:white;">{b_cnt}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;">B Suppliers</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:white;">{c_cnt}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;">C Suppliers</div>
+    </div>
+  </div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.4);align-self:flex-end;">
+    Score = PO(35%) · Contract(35%) · Concentration(20%) · Maverick(10%) · weighted by tier
+  </div>
+</div>"""
+
+
+def _build_supplier_tabulator(df: pd.DataFrame, tier: str = "All") -> pn.widgets.Tabulator:
+    """Build editable Tabulator for the compliance supplier table."""
+    filtered = df if tier == "All" else df[df["tier"] == tier].copy()
+    display = filtered[[
+        "vendor_name", "category", "tier", "relationship_status",
+        "total_spend", "po_coverage_pct", "contract_status",
+        "contract_end", "risk_level", "compliance_score",
+    ]].copy()
+    display.columns = [
+        "Supplier", "Category", "Tier", "Relationship",
+        "Spend €K", "PO %", "Contract", "Expiry", "Risk", "Score",
+    ]
+    display["Spend €K"] = display["Spend €K"].round(0).astype(int)
+    display["PO %"]     = display["PO %"].round(0).astype(int)
+    display["Score"]    = display["Score"].round(1)
+
+    table = pn.widgets.Tabulator(
+        display,
+        sizing_mode="stretch_width",
+        height=420,
+        theme="bootstrap",
+        page_size=20,
+        show_index=False,
+        editors={
+            "Category":     {"type": "select", "values": TAXONOMY},
+            "Relationship": {"type": "select", "values": RELATIONSHIP_OPTIONS},
+            "Tier":         {"type": "select", "values": ["A", "B", "C"]},
+        },
+        frozen_columns=["Supplier"],
+        text_align={"Score": "center", "Tier": "center", "PO %": "center"},
+        widths={
+            "Supplier": 160, "Category": 170, "Tier": 60,
+            "Relationship": 130, "Spend €K": 90, "PO %": 65,
+            "Contract": 130, "Expiry": 95, "Risk": 80, "Score": 70,
+        },
+        stylesheets=["""
+            .tabulator{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                       font-size:12px;border:1px solid #E2E8F0;border-radius:8px;}
+            .tabulator .tabulator-header .tabulator-col{
+                background:#F8F9FA;color:#1B3A6B;font-weight:700;
+                font-size:11px;text-transform:uppercase;letter-spacing:0.5px;}
+            .tabulator .tabulator-row:hover{background:#F0F4FF;}
+        """],
+    )
+
+    def _on_edit(event):
+        global _sc_df
+        col_map = {
+            "Category": "category", "Relationship": "relationship_status", "Tier": "tier"
+        }
+        field = col_map.get(event.column)
+        if not field:
+            return
+        supplier = display.iloc[event.row]["Supplier"]
+        try:
+            conn = get_connection("default")
+            update_supplier_field(conn, "default", supplier, field, event.value)
+            conn.close()
+            _sc_df.loc[_sc_df["vendor_name"] == supplier, field] = event.value
+            _sc_score_pane.object = _build_sc_score_html(_sc_df)
+        except Exception as e:
+            print(f"[Scorecard] edit error: {e}")
+
+    table.on_edit(_on_edit)
+    return table
+
+
+def _chart_maverick_trend() -> go.Figure:
+    """Line chart of maverick spend % over 2022–2026 with 5% target line."""
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=YEARS, y=MAVERICK_PCT, mode="lines+markers",
+        name="Maverick Spend", line=dict(color=RED, width=2.5),
+        marker=dict(size=7, color=RED),
+    ))
+    fig.add_trace(go.Scatter(
+        x=[YEARS[0], YEARS[-1]], y=[5, 5], mode="lines",
+        name="Target 5%", line=dict(color=GREEN, width=1.5, dash="dash"),
+    ))
+    fig.add_hrect(y0=5, y1=max(MAVERICK_PCT) + 2,
+                  fillcolor="rgba(192,57,43,0.06)", line_width=0)
+    fig.update_layout(
+        **LAYOUT,
+        title=dict(text="Maverick Spend Trend (%)", font=dict(size=13, color=NAVY)),
+        yaxis=dict(title="% of total spend", ticksuffix="%", range=[0, max(MAVERICK_PCT) + 3]),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=280,
+    )
+    return fig
+
+
+def _chart_expiry_gantt() -> go.Figure:
+    """Contract expiry scatter — suppliers plotted by expiry date, sized by value."""
+    rows = [r for r in CONTRACTS_DATA if r["Expiry"] != "N/A"]
+    if not rows:
+        return go.Figure()
+    expiry_dates = [r["Expiry"] for r in rows]
+    suppliers    = [r["Supplier"] for r in rows]
+    values       = [r["Value €K"] for r in rows]
+    risks        = [r["Risk"] for r in rows]
+    colors       = [_RISK_BADGE.get(r, DIM) for r in risks]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=expiry_dates,
+        y=suppliers,
+        mode="markers+text",
+        marker=dict(
+            size=[max(10, min(v / 300, 40)) for v in values],
+            color=colors, opacity=0.85,
+            line=dict(width=1.5, color="white"),
+        ),
+        text=[f"€{v:,}K" for v in values],
+        textposition="middle right",
+        textfont=dict(size=10, color=TEXT),
+        hovertemplate=(
+            "<b>%{y}</b><br>Expiry: %{x}<br>"
+            + "<br>".join(f"€{v:,}K" for v in values)
+            + "<extra></extra>"
+        ),
+    ))
+    fig.update_layout(
+        **LAYOUT,
+        title=dict(text="Contract Expiry Timeline (bubble = contract value)",
+                   font=dict(size=13, color=NAVY)),
+        xaxis=dict(title="", type="date"),
+        yaxis=dict(title="", autorange="reversed"),
+        height=320,
+        margin=dict(l=130, r=80, t=50, b=40),
+        showlegend=False,
+    )
+    return fig
+
+
+def refresh_compliance_tab():
+    """Reload supplier data and redraw all compliance scorecard panes."""
+    global _sc_df
+    try:
+        conn = get_connection("default")
+        _sc_df = get_supplier_profiles(conn, "default")
+        conn.close()
+    except Exception:
+        _sc_df = build_demo_profiles()
+
+    tier = _sc_tier_filter.value
+    _sc_score_pane.object = _build_sc_score_html(_sc_df)
+    _sc_table_pane.clear()
+    _sc_table_pane.append(_build_supplier_tabulator(_sc_df, tier))
+    _sc_maverick_pane.object = _chart_maverick_trend()
+    _sc_expiry_pane.object   = _chart_expiry_gantt()
+
+
+def _on_tier_filter(event):
+    tier = event.new
+    _sc_table_pane.clear()
+    _sc_table_pane.append(_build_supplier_tabulator(_sc_df, tier))
+
+_sc_tier_filter.param.watch(_on_tier_filter, "value")
+
+# ── Build the static Compliance Scorecard tab column ─────────────────────────
+_compliance_tab = pn.Column(
+    pn.pane.HTML(
+        f'<div style="font-family:Georgia,serif;font-size:18px;font-weight:700;'
+        f'color:{NAVY};padding:8px 0 4px;">Supplier Compliance Scorecard</div>'
+        f'<div style="font-size:12px;color:{DIM};font-family:-apple-system,sans-serif;'
+        f'padding-bottom:12px;">ABC tiers auto-computed from spend. Edit Category, Tier, '
+        f'or Relationship inline — changes persist and feed back into future uploads.</div>',
+        sizing_mode="stretch_width",
+    ),
+    _sc_score_pane,
+    pn.layout.Divider(),
+    pn.Row(
+        pn.pane.HTML(
+            f'<span style="font-size:12px;font-weight:600;color:{NAVY};'
+            f'font-family:-apple-system,sans-serif;">Filter by tier:</span>',
+            align="center",
+        ),
+        _sc_tier_filter,
+        sizing_mode="stretch_width",
+        align="center",
+        styles={"padding": "4px 0 10px"},
+    ),
+    _sc_table_pane,
+    pn.layout.Divider(),
+    pn.Row(
+        pn.Column(
+            section_header("📈 Maverick Spend Trend"),
+            _sc_maverick_pane,
+            sizing_mode="stretch_width",
+        ),
+        pn.Column(
+            section_header("📅 Contract Expiry Timeline"),
+            _sc_expiry_pane,
+            sizing_mode="stretch_width",
+        ),
+        sizing_mode="stretch_width",
+    ),
+    sizing_mode="stretch_width",
+)
+
+
 # ── Floating ICARUS AI FAB — rendered into document.body via script ───────────
 # Panel/Bokeh wraps components in transform containers which break position:fixed.
 # Fix: render FAB as raw HTML and move it to document.body from a script so it
@@ -1417,92 +1722,102 @@ _fab_result_store = pn.pane.HTML(
 )
 
 _fab_ui_html = pn.pane.HTML(f"""
-<div id="sl-fab-root">
-  <button id="sl-fab-btn" title="ICARUS AI">{_ICARUS_AI_SVG}</button>
-  <div id="sl-fab-chat">
-    <div id="sl-fab-hdr">
-      {_EYE_HTML}&nbsp;<span style="font-size:13px;font-weight:700;color:#1B3A6B;
-        font-family:-apple-system,sans-serif;">ICARUS AI</span>
-      <button id="sl-fab-close">✕</button>
-    </div>
-    <div id="sl-fab-input-row">
-      <input id="sl-fab-input" type="text" placeholder="Ask about your spend…">
-      <button id="sl-fab-send">→</button>
-    </div>
-    <div id="sl-fab-result"></div>
-  </div>
-</div>
-<style>
-#sl-fab-btn{{position:fixed;bottom:24px;right:24px;z-index:9999;width:52px;height:52px;
-  border-radius:50%;border:none;cursor:pointer;background:#1B3A6B;
-  box-shadow:0 4px 16px rgba(27,58,107,0.4);display:flex;align-items:center;
-  justify-content:center;transition:background 0.15s;padding:0;}}
-#sl-fab-btn:hover{{background:#2E5BA8;}}
-#sl-fab-chat{{position:fixed;bottom:84px;right:24px;z-index:9998;width:340px;
-  background:white;border-radius:14px;padding:16px;display:none;
-  box-shadow:0 8px 32px rgba(27,58,107,0.18);border:1px solid #E2E8F0;
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}}
-#sl-fab-hdr{{display:flex;align-items:center;gap:6px;margin-bottom:10px;}}
-#sl-fab-close{{margin-left:auto;background:none;border:none;cursor:pointer;
-  font-size:16px;color:#888;line-height:1;}}
-#sl-fab-input-row{{display:flex;gap:6px;}}
-#sl-fab-input{{flex:1;height:34px;border:1.5px solid #D0DAF0;border-radius:8px;
-  padding:0 10px;font-size:13px;background:#fafafa;outline:none;}}
-#sl-fab-input:focus{{border-color:#1B3A6B;background:white;}}
-#sl-fab-send{{width:36px;height:34px;border:none;border-radius:8px;cursor:pointer;
-  background:#1B3A6B;color:white;font-size:16px;font-weight:700;}}
-#sl-fab-send:hover{{background:#2E5BA8;}}
-#sl-fab-result{{margin-top:10px;font-size:13px;color:#1a1a2e;line-height:1.7;}}
-</style>
 <script>
+// ── ICARUS AI FAB — injected directly into document.body/head ─────────────────
+// Panel/Bokeh wraps pane content in transform:translate() containers which create
+// a new stacking context and break position:fixed.  Fix: build the FAB elements
+// in JS, inject CSS into <head> (outside any shadow/transform boundary), and
+// append the DOM nodes straight to document.body so position:fixed is always
+// relative to the viewport.
 (function(){{
-  function mountFab(){{
-    var root=document.getElementById('sl-fab-root');
-    if(!root||root.parentElement===document.body)return;
-    var btn=document.getElementById('sl-fab-btn');
-    var chat=document.getElementById('sl-fab-chat');
-    if(btn) document.body.appendChild(btn);
-    if(chat) document.body.appendChild(chat);
-    root.remove();
-    wireFab();
+  if(document.getElementById('sl-fab-btn'))return; // guard against double-mount
+
+  // ── 1. Inject CSS into <head> so it is never trapped in a stacking context ──
+  var style=document.createElement('style');
+  style.id='sl-fab-styles';
+  style.textContent=[
+    '#sl-fab-btn{{position:fixed;bottom:24px;right:24px;z-index:9999;width:52px;height:52px;',
+    '  border-radius:50%;border:none;cursor:pointer;background:#1B3A6B;',
+    '  box-shadow:0 4px 16px rgba(27,58,107,0.4);display:flex;align-items:center;',
+    '  justify-content:center;transition:background 0.15s;padding:0;}}',
+    '#sl-fab-btn:hover{{background:#2E5BA8;}}',
+    '#sl-fab-chat{{position:fixed;bottom:84px;right:24px;z-index:9998;width:340px;',
+    '  background:white;border-radius:14px;padding:16px;display:none;',
+    '  box-shadow:0 8px 32px rgba(27,58,107,0.18);border:1px solid #E2E8F0;',
+    '  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}}',
+    '#sl-fab-hdr{{display:flex;align-items:center;gap:6px;margin-bottom:10px;}}',
+    '#sl-fab-close{{margin-left:auto;background:none;border:none;cursor:pointer;',
+    '  font-size:16px;color:#888;line-height:1;}}',
+    '#sl-fab-input-row{{display:flex;gap:6px;}}',
+    '#sl-fab-input{{flex:1;height:34px;border:1.5px solid #D0DAF0;border-radius:8px;',
+    '  padding:0 10px;font-size:13px;background:#fafafa;outline:none;}}',
+    '#sl-fab-input:focus{{border-color:#1B3A6B;background:white;}}',
+    '#sl-fab-send{{width:36px;height:34px;border:none;border-radius:8px;cursor:pointer;',
+    '  background:#1B3A6B;color:white;font-size:16px;font-weight:700;}}',
+    '#sl-fab-send:hover{{background:#2E5BA8;}}',
+    '#sl-fab-result{{margin-top:10px;font-size:13px;color:#1a1a2e;line-height:1.7;}}'
+  ].join('');
+  document.head.appendChild(style);
+
+  // ── 2. Build FAB button and append to document.body ──────────────────────────
+  var btn=document.createElement('button');
+  btn.id='sl-fab-btn';
+  btn.title='ICARUS AI';
+  btn.innerHTML='{_ICARUS_AI_SVG}';
+  document.body.appendChild(btn);
+
+  // ── 3. Build chat panel and append to document.body ──────────────────────────
+  var chat=document.createElement('div');
+  chat.id='sl-fab-chat';
+  chat.innerHTML=[
+    '<div id="sl-fab-hdr">',
+    '  {_EYE_HTML}',
+    '  &nbsp;<span style="font-size:13px;font-weight:700;color:#1B3A6B;',
+    '    font-family:-apple-system,sans-serif;">ICARUS AI</span>',
+    '  <button id="sl-fab-close">&#x2715;</button>',
+    '</div>',
+    '<div id="sl-fab-input-row">',
+    '  <input id="sl-fab-input" type="text" placeholder="Ask about your spend…">',
+    '  <button id="sl-fab-send">&#x2192;</button>',
+    '</div>',
+    '<div id="sl-fab-result"></div>'
+  ].join('');
+  document.body.appendChild(chat);
+
+  // ── 4. Wire interactions ──────────────────────────────────────────────────────
+  var close=document.getElementById('sl-fab-close');
+  var inp=document.getElementById('sl-fab-input');
+  var send=document.getElementById('sl-fab-send');
+  var result=document.getElementById('sl-fab-result');
+
+  btn.onclick=function(){{
+    chat.style.display=chat.style.display==='none'||chat.style.display===''?'block':'none';
+  }};
+  if(close)close.onclick=function(){{chat.style.display='none';}};
+
+  function sendQ(){{
+    var q=inp.value.trim();
+    if(!q)return;
+    result.innerHTML='<span style="color:#888;">Thinking…</span>';
+    try{{
+      var bridge=Bokeh.documents[0].get_model_by_name('fab_query_bridge');
+      if(bridge){{bridge.value=q;}}
+    }}catch(e){{result.textContent='Could not reach ICARUS AI.';}}
   }}
-  function wireFab(){{
-    var btn=document.getElementById('sl-fab-btn');
-    var chat=document.getElementById('sl-fab-chat');
-    var close=document.getElementById('sl-fab-close');
-    var inp=document.getElementById('sl-fab-input');
-    var send=document.getElementById('sl-fab-send');
-    var result=document.getElementById('sl-fab-result');
-    if(!btn)return;
-    btn.onclick=function(){{chat.style.display=chat.style.display==='none'?'block':'none';}};
-    if(close)close.onclick=function(){{chat.style.display='none';}};
-    function sendQ(){{
-      var q=inp.value.trim();
-      if(!q)return;
-      result.innerHTML='<span style="color:#888;">Thinking…</span>';
-      try{{
-        var bridge=Bokeh.documents[0].get_model_by_name('fab_query_bridge');
-        if(bridge){{bridge.value=q;}}
-      }}catch(e){{result.textContent='Could not reach ICARUS AI.';}}
-    }}
-    send.onclick=sendQ;
-    inp.onkeydown=function(e){{if(e.key==='Enter')sendQ();}};
-    var observer=new MutationObserver(function(){{
-      var store=document.getElementById('sl-fab-result-store');
-      if(store&&store.innerHTML.trim()){{result.innerHTML=store.innerHTML;}}
-    }});
-    function attachObs(){{
-      var store=document.getElementById('sl-fab-result-store');
-      if(store){{observer.observe(store,{{childList:true,subtree:true,characterData:true}});}}
-      else{{setTimeout(attachObs,500);}}
-    }}
-    attachObs();
+  send.onclick=sendQ;
+  inp.onkeydown=function(e){{if(e.key==='Enter')sendQ();}};
+
+  // ── 5. Watch result-store div for Python→JS response updates ─────────────────
+  var observer=new MutationObserver(function(){{
+    var store=document.getElementById('sl-fab-result-store');
+    if(store&&store.innerHTML.trim()){{result.innerHTML=store.innerHTML;}}
+  }});
+  function attachObs(){{
+    var store=document.getElementById('sl-fab-result-store');
+    if(store){{observer.observe(store,{{childList:true,subtree:true,characterData:true}});}}
+    else{{setTimeout(attachObs,500);}}
   }}
-  if(document.readyState==='complete'||document.readyState==='interactive'){{
-    setTimeout(mountFab,150);
-  }}else{{
-    document.addEventListener('DOMContentLoaded',function(){{setTimeout(mountFab,150);}});
-  }}
+  attachObs();
 }})();
 </script>
 """, sizing_mode="stretch_width")
@@ -2133,6 +2448,7 @@ icarus_panel = IcarusPanel(
 )
 pn.state.onload(icarus_panel.load_recent)
 pn.state.onload(refresh_all_insights)
+pn.state.onload(refresh_compliance_tab)
 
 def handle_icarus(event):
     status_log.object = "🪶 Icarus crawl started — check the Icarus tab for results..."
@@ -2143,13 +2459,14 @@ icarus_btn.on_click(handle_icarus)
 tabs = pn.Tabs(
     ("Dashboard", main_tab),
     ("Deep Dive", chart_deep),
+    ("📋 Compliance", _compliance_tab),
     ("🪶 ICARUS AI", icarus_panel.view()),
     sizing_mode="stretch_width",
 )
 
 # Hide dashboard sidebar when user switches to the Icarus tab (index 2)
 def _on_tab_change(event):
-    _dash_sidebar.visible = (event.new != 2)
+    _dash_sidebar.visible = (event.new != 3)  # hide sidebar on ICARUS AI tab (index 3)
 
 tabs.param.watch(_on_tab_change, 'active')
 

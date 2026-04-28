@@ -249,12 +249,40 @@ def init_database(client_name: str = "default") -> None:
     CREATE INDEX IF NOT EXISTS idx_matches_accounting ON matches(accounting_raw_id);
     CREATE INDEX IF NOT EXISTS idx_matches_procurement ON matches(procurement_raw_id);
 
+
+    -- ── TABLE 6: SUPPLIER PROFILES ───────────────────────────────────────────
+    -- Persistent supplier intelligence: ABC tier, compliance score, relationship
+    -- status. Grows with every upload. The SRM record for each vendor.
+    -- tier_override survives every recomputation — user's manual tier wins.
+
+    CREATE TABLE IF NOT EXISTS supplier_profiles (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_name          TEXT NOT NULL,
+        vendor_name          TEXT NOT NULL,
+        category             TEXT,
+        tier                 TEXT,
+        tier_computed        TEXT,
+        tier_override        TEXT,
+        relationship_status  TEXT,
+        total_spend          REAL DEFAULT 0,
+        po_coverage_pct      REAL DEFAULT 0,
+        contract_status      TEXT DEFAULT 'Unknown',
+        contract_end         TEXT,
+        risk_level           TEXT DEFAULT 'Medium',
+        single_source        INTEGER DEFAULT 0,
+        compliance_score     REAL DEFAULT 0,
+        last_updated         TEXT,
+        UNIQUE(client_name, vendor_name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sp_client ON supplier_profiles(client_name);
+
     """)
 
     conn.commit()
     conn.close()
 
-    print(f"  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches")
+    print(f"  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches, supplier_profiles")
     print(f"── Database ready ✅ ────────────────────────────────────\n")
 
 
