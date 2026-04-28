@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" width="48" align="left" style="margin-right:12px;">
+
 # SpendLens
 ### AI-Powered Procurement Intelligence
 
