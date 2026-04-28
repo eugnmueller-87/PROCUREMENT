@@ -1400,98 +1400,138 @@ def refresh_all_insights():
     insight_treemap.object     = _build_insight_html("treemap")
 
 
-# ── Floating ICARUS AI FAB (bottom-right, click feather to open) ─────────────
-_fab_input = pn.widgets.TextInput(
-    placeholder="Ask ICARUS AI about your spend…",
+# ── Floating ICARUS AI FAB — rendered into document.body via script ───────────
+# Panel/Bokeh wraps components in transform containers which break position:fixed.
+# Fix: render FAB as raw HTML and move it to document.body from a script so it
+# sits outside any transformed ancestor. Python bridge uses named Bokeh models.
+
+_fab_query_bridge = pn.widgets.TextInput(
+    name="fab_query_bridge",
+    value="",
+    stylesheets=[":host{display:none!important;}"],
+)
+_fab_result_store = pn.pane.HTML(
+    '<div id="sl-fab-result-store"></div>',
     sizing_mode="stretch_width",
-    stylesheets=["""
-        :host{flex:1;}
-        label{display:none!important;}
-        .bk-input{height:34px;border:1.5px solid #D0DAF0;border-radius:8px;
-                  padding:0 10px;font-size:13px;background:#fafafa;
-                  font-family:-apple-system,sans-serif;}
-        .bk-input:focus{border-color:#1B3A6B;background:white;outline:none;}
-    """],
-)
-_fab_result = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
-_fab_send   = pn.widgets.Button(
-    name="→", button_type="primary", width=36,
-    stylesheets=["""
-        .bk-btn{width:36px!important;height:34px!important;padding:0;border-radius:8px;
-                font-size:16px;font-weight:700;background:#1B3A6B;border-color:#1B3A6B;color:white;}
-        .bk-btn:hover{background:#2E5BA8;}
-    """],
-)
-_fab_chat = pn.Column(
-    pn.pane.HTML(
-        f'{_EYE_HTML}&nbsp;'
-        f'<span style="font-size:13px;font-weight:700;color:#1B3A6B;vertical-align:middle;'
-        f'font-family:-apple-system,sans-serif;">ICARUS AI</span>',
-        sizing_mode="stretch_width", margin=(0, 0, 8, 0),
-    ),
-    pn.Row(_fab_input, _fab_send, align="center", sizing_mode="stretch_width",
-           styles={"gap": "6px"}),
-    _fab_result,
-    visible=False,
-    styles={
-        "position": "fixed", "bottom": "84px", "right": "24px", "z-index": "9998",
-        "width": "340px", "background": "white", "border-radius": "14px", "padding": "16px",
-        "box-shadow": "0 8px 32px rgba(27,58,107,0.18)", "border": "1px solid #E2E8F0",
-    },
-)
-_fab_toggle = pn.widgets.Toggle(
-    name="", icon=_ICARUS_AI_SVG, icon_size="22px",
-    value=False, width=52, height=52,
-    stylesheets=["""
-        .bk-btn{
-            width:52px!important;height:52px!important;border-radius:50%!important;
-            padding:0!important;background:#1B3A6B!important;border-color:#1B3A6B!important;
-            box-shadow:0 4px 16px rgba(27,58,107,0.4)!important;
-        }
-        .bk-btn:hover,.bk-btn.bk-active{background:#2E5BA8!important;border-color:#2E5BA8!important;}
-    """],
-    styles={"position": "fixed", "bottom": "24px", "right": "24px", "z-index": "9999"},
+    stylesheets=[":host{display:none!important;}"],
 )
 
+_fab_ui_html = pn.pane.HTML(f"""
+<div id="sl-fab-root">
+  <button id="sl-fab-btn" title="ICARUS AI">{_ICARUS_AI_SVG}</button>
+  <div id="sl-fab-chat">
+    <div id="sl-fab-hdr">
+      {_EYE_HTML}&nbsp;<span style="font-size:13px;font-weight:700;color:#1B3A6B;
+        font-family:-apple-system,sans-serif;">ICARUS AI</span>
+      <button id="sl-fab-close">✕</button>
+    </div>
+    <div id="sl-fab-input-row">
+      <input id="sl-fab-input" type="text" placeholder="Ask about your spend…">
+      <button id="sl-fab-send">→</button>
+    </div>
+    <div id="sl-fab-result"></div>
+  </div>
+</div>
+<style>
+#sl-fab-btn{{position:fixed;bottom:24px;right:24px;z-index:9999;width:52px;height:52px;
+  border-radius:50%;border:none;cursor:pointer;background:#1B3A6B;
+  box-shadow:0 4px 16px rgba(27,58,107,0.4);display:flex;align-items:center;
+  justify-content:center;transition:background 0.15s;padding:0;}}
+#sl-fab-btn:hover{{background:#2E5BA8;}}
+#sl-fab-chat{{position:fixed;bottom:84px;right:24px;z-index:9998;width:340px;
+  background:white;border-radius:14px;padding:16px;display:none;
+  box-shadow:0 8px 32px rgba(27,58,107,0.18);border:1px solid #E2E8F0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}}
+#sl-fab-hdr{{display:flex;align-items:center;gap:6px;margin-bottom:10px;}}
+#sl-fab-close{{margin-left:auto;background:none;border:none;cursor:pointer;
+  font-size:16px;color:#888;line-height:1;}}
+#sl-fab-input-row{{display:flex;gap:6px;}}
+#sl-fab-input{{flex:1;height:34px;border:1.5px solid #D0DAF0;border-radius:8px;
+  padding:0 10px;font-size:13px;background:#fafafa;outline:none;}}
+#sl-fab-input:focus{{border-color:#1B3A6B;background:white;}}
+#sl-fab-send{{width:36px;height:34px;border:none;border-radius:8px;cursor:pointer;
+  background:#1B3A6B;color:white;font-size:16px;font-weight:700;}}
+#sl-fab-send:hover{{background:#2E5BA8;}}
+#sl-fab-result{{margin-top:10px;font-size:13px;color:#1a1a2e;line-height:1.7;}}
+</style>
+<script>
+(function(){{
+  function mountFab(){{
+    var root=document.getElementById('sl-fab-root');
+    if(!root||root.parentElement===document.body)return;
+    var btn=document.getElementById('sl-fab-btn');
+    var chat=document.getElementById('sl-fab-chat');
+    if(btn) document.body.appendChild(btn);
+    if(chat) document.body.appendChild(chat);
+    root.remove();
+    wireFab();
+  }}
+  function wireFab(){{
+    var btn=document.getElementById('sl-fab-btn');
+    var chat=document.getElementById('sl-fab-chat');
+    var close=document.getElementById('sl-fab-close');
+    var inp=document.getElementById('sl-fab-input');
+    var send=document.getElementById('sl-fab-send');
+    var result=document.getElementById('sl-fab-result');
+    if(!btn)return;
+    btn.onclick=function(){{chat.style.display=chat.style.display==='none'?'block':'none';}};
+    if(close)close.onclick=function(){{chat.style.display='none';}};
+    function sendQ(){{
+      var q=inp.value.trim();
+      if(!q)return;
+      result.innerHTML='<span style="color:#888;">Thinking…</span>';
+      try{{
+        var bridge=Bokeh.documents[0].get_model_by_name('fab_query_bridge');
+        if(bridge){{bridge.value=q;}}
+      }}catch(e){{result.textContent='Could not reach ICARUS AI.';}}
+    }}
+    send.onclick=sendQ;
+    inp.onkeydown=function(e){{if(e.key==='Enter')sendQ();}};
+    var observer=new MutationObserver(function(){{
+      var store=document.getElementById('sl-fab-result-store');
+      if(store&&store.innerHTML.trim()){{result.innerHTML=store.innerHTML;}}
+    }});
+    function attachObs(){{
+      var store=document.getElementById('sl-fab-result-store');
+      if(store){{observer.observe(store,{{childList:true,subtree:true,characterData:true}});}}
+      else{{setTimeout(attachObs,500);}}
+    }}
+    attachObs();
+  }}
+  if(document.readyState==='complete'||document.readyState==='interactive'){{
+    setTimeout(mountFab,150);
+  }}else{{
+    document.addEventListener('DOMContentLoaded',function(){{setTimeout(mountFab,150);}});
+  }}
+}})();
+</script>
+""", sizing_mode="stretch_width")
 
-def _on_fab_toggle(event):
-    _fab_chat.visible = event.new
-    _fab_toggle.icon  = (
-        '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">'
-        '<line x1="5" y1="5" x2="19" y2="19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>'
-        '<line x1="19" y1="5" x2="5" y2="19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>'
-        '</svg>'
-        if event.new else _ICARUS_AI_SVG
-    )
 
-_fab_toggle.param.watch(_on_fab_toggle, "value")
-
-
-def _fab_ask(_):
-    q = _fab_input.value.strip()
+def _fab_ask(event):
+    q = (event.new or "").strip()
     if not q:
         return
-    _fab_send.loading   = True
-    _fab_result.object  = '<div style="color:#888;font-size:12px;padding:6px 0;">Thinking…</div>'
-    _fab_result.visible = True
 
     def _do():
         try:
             cats = list(df_meta["category"].dropna().unique()) if "category" in df_meta.columns else []
             res  = _icarus_mod.query_with_claude(q, cats, "Client")
             ans  = res.get("answer", "No response received.")
-            _fab_result.object = (
-                f'<div style="font-size:13px;color:#1a1a2e;line-height:1.7;'
-                f'padding:8px 0;font-family:-apple-system,sans-serif;">{ans}</div>'
+            _fab_result_store.object = (
+                f'<div id="sl-fab-result-store" style="font-size:13px;color:#1a1a2e;'
+                f'line-height:1.7;">{ans}</div>'
             )
         except Exception as ex:
-            _fab_result.object = f'<div style="color:{RED};font-size:12px;">Error: {ex}</div>'
+            _fab_result_store.object = (
+                f'<div id="sl-fab-result-store" style="color:{RED};font-size:12px;">Error: {ex}</div>'
+            )
         finally:
-            _fab_send.loading = False
+            _fab_query_bridge.value = ""
 
     threading.Thread(target=_do, daemon=True).start()
 
-_fab_send.on_click(_fab_ask)
+_fab_query_bridge.param.watch(_fab_ask, "value")
 
 data_preview = pn.widgets.Tabulator(
     df_meta[["category", "spend_2026e", "risk", "concentration", "contract_end"]],
@@ -2116,7 +2156,7 @@ tabs.param.watch(_on_tab_change, 'active')
 template = pn.template.FastListTemplate(
     title="SpendLens",
     sidebar=[sidebar_col],
-    main=[tabs, _fab_chat, _fab_toggle],
+    main=[tabs, _fab_ui_html, _fab_result_store, _fab_query_bridge],
     accent_base_color=NAVY,
     header_background=NAVY,
     background_color=BG,

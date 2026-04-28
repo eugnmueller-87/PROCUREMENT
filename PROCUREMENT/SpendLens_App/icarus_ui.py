@@ -6,6 +6,7 @@ import param
 import threading
 from collections import defaultdict
 from datetime import datetime, timezone
+from html import escape
 
 import icarus
 
@@ -623,6 +624,10 @@ function icarusFeedback(sigId,idx,value){{
   var n=document.getElementById('fb-no-'+idx);
   if(y)y.classList.toggle('selected-yes',value==='relevant');
   if(n)n.classList.toggle('selected-no',value==='not_relevant');
+  try{{
+    var bridge=Bokeh.documents[0].get_model_by_name('icarus_feedback_bridge');
+    if(bridge){{bridge.value=sigId+':'+value;}}
+  }}catch(e){{}}
 }}
 </script>"""
 
@@ -645,6 +650,15 @@ class IcarusPanel(param.Parameterized):
             sizing_mode="stretch_width",
             visible=True,
         )
+        # Feedback bridge — hidden TextInput; JS sets value to "sigId:feedback",
+        # param.watch fires _on_feedback which calls icarus.record_feedback()
+        self._feedback_bridge = pn.widgets.TextInput(
+            name="icarus_feedback_bridge",
+            value="",
+            stylesheets=[":host{display:none!important;}"],
+        )
+        self._feedback_bridge.param.watch(self._on_feedback, "value")
+
         # In-memory document store — cleared automatically on every page refresh
         self._docs       = []   # list of {id, filename, text, char_count, uploaded_at}
         self._next_doc_id = 0
@@ -828,10 +842,11 @@ class IcarusPanel(param.Parameterized):
                     "CSV": "📊", "XLSX": "📊"}.get(ext, "📎")
             kc   = f"{doc['char_count']:,}"
             date = _fmt_date(doc.get("uploaded_at", ""))
+            fname = escape(doc["filename"])
             rows += (
                 f'<div class="doc-item">'
                 f'<span class="doc-icon">{icon}</span>'
-                f'<span class="doc-name" title="{doc["filename"]}">{doc["filename"]}</span>'
+                f'<span class="doc-name" title="{fname}">{fname}</span>'
                 f'<span class="doc-meta">{kc} chars &middot; {date}</span>'
                 f'</div>'
             )
@@ -911,6 +926,17 @@ class IcarusPanel(param.Parameterized):
         self._signals = icarus.get_recent_signals(limit=50)
         self._header_pane.object = _build_header_html(self._signals, loading=False)
         self._cards_pane.object  = _build_cards_html(self._signals, loading=False)
+
+    def _on_feedback(self, event):
+        """Called when JS sets _feedback_bridge.value to 'sigId:feedback'."""
+        v = (event.new or "").strip()
+        if not v or ":" not in v:
+            return
+        sig_id_str, feedback = v.split(":", 1)
+        try:
+            icarus.record_feedback(int(sig_id_str), feedback)
+        except Exception as e:
+            print(f"[Icarus] feedback error: {e}")
 
     def view(self):
         # ── Query input row ───────────────────────────────────────────────────
@@ -1030,6 +1056,7 @@ class IcarusPanel(param.Parameterized):
             enter_key,
             self._result_pane,
             self._cards_pane,
+            self._feedback_bridge,
             sizing_mode="stretch_width",
             styles={"background": "white", "border": "1px solid #e8e8e8",
                     "border-radius": "12px", "overflow": "hidden"},

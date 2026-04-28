@@ -616,8 +616,15 @@ def query_with_claude(query: str, client_categories: list, client_name: str = "C
         for s in recent
     ) if recent else "No stored signals yet."
 
-    # Fresh headlines for context
+    # Fresh headlines — pre-filtered by query keyword overlap
     articles = fetch_articles(client_categories)
+    query_words = {w for w in query.lower().split() if len(w) > 3}
+    if query_words:
+        def _matches(a):
+            text = (a.get("headline", "") + " " + a.get("summary", "")).lower()
+            return any(w in text for w in query_words)
+        filtered = [a for a in articles if _matches(a)]
+        articles = filtered if len(filtered) >= 5 else articles
     art_text = "\n".join(
         f"- {a['headline']} ({a['source']}, {a.get('published','')[:10]})"
         for a in articles[:25]
