@@ -210,13 +210,19 @@ def flag_contract_status(df: pd.DataFrame, fields: dict) -> pd.Series:
 
         # Check contract ID
         if contract_col:
-            contract_val = row.get(contract_col)
+            contract_val = row[contract_col]
+            # Guard against duplicate columns returning a Series instead of scalar
+            if isinstance(contract_val, pd.Series):
+                contract_val = contract_val.iloc[0]
             has_contract = not (pd.isna(contract_val) or
                                 str(contract_val).strip() in ["", "nan", "None"])
 
         # Check expiry date
         if expiry_col and has_contract:
-            expiry_val = row.get(expiry_col)
+            expiry_val = row[expiry_col]
+            # Guard against duplicate columns returning a Series instead of scalar
+            if isinstance(expiry_val, pd.Series):
+                expiry_val = expiry_val.iloc[0]
             if not pd.isna(expiry_val):
                 try:
                     expiry_date = pd.Timestamp(expiry_val)

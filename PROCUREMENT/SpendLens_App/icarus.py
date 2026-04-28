@@ -75,6 +75,7 @@ ICARUS_DB = "clients/default/icarus_memory.db"
 
 # RSS feeds mapped to the spend categories they influence
 RSS_SOURCES = [
+    # ── General business & tech news ──────────────────────────────────────────
     {
         "name": "Reuters Business",
         "url": "https://feeds.reuters.com/reuters/businessNews",
@@ -94,21 +95,18 @@ RSS_SOURCES = [
                        "AI/ML APIs & Data", "Telecom & Voice"],
     },
     {
-        "name": "Handelsblatt",
-        "url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
-        "categories": ["Facilities & Office", "Professional Services", "Real Estate",
-                       "Recruitment & HR", "Travel & Expenses"],
+        "name": "Ars Technica",
+        "url": "https://feeds.arstechnica.com/arstechnica/index",
+        "categories": ["Cloud & Compute", "AI/ML APIs & Data", "IT Software & SaaS",
+                       "Hardware & Equipment"],
     },
     {
-        "name": "DatacenterDynamics",
-        "url": "https://www.datacenterdynamics.com/en/rss/",
-        "categories": ["Cloud & Compute", "Facilities & Office", "Hardware & Equipment"],
+        "name": "ZDNet",
+        "url": "https://www.zdnet.com/news/rss.xml",
+        "categories": ["Cloud & Compute", "IT Software & SaaS", "AI/ML APIs & Data",
+                       "Telecom & Voice", "Hardware & Equipment"],
     },
-    {
-        "name": "Euractiv",
-        "url": "https://www.euractiv.com/feed/",
-        "categories": ["Facilities & Office", "Professional Services", "Real Estate", "Travel & Expenses"],
-    },
+    # ── Procurement & supply chain ────────────────────────────────────────────
     {
         "name": "Spend Matters",
         "url": "https://spendmatters.com/feed/",
@@ -116,10 +114,61 @@ RSS_SOURCES = [
                        "Marketing & Campaigns"],
     },
     {
+        "name": "Supply Chain Dive",
+        "url": "https://www.supplychaindive.com/feeds/news/",
+        "categories": ["Hardware & Equipment", "Facilities & Office", "Professional Services",
+                       "Cloud & Compute", "Recruitment & HR"],
+    },
+    {
+        "name": "Supply Chain Brain",
+        "url": "https://www.supplychainbrain.com/rss/allnews.aspx",
+        "categories": ["Hardware & Equipment", "Facilities & Office", "Professional Services",
+                       "Travel & Expenses"],
+    },
+    {
+        "name": "CPO Rising (Ardent Partners)",
+        "url": "https://cporising.com/feed/",
+        "categories": ["Professional Services", "IT Software & SaaS", "Recruitment & HR",
+                       "Cloud & Compute", "Marketing & Campaigns", "Hardware & Equipment",
+                       "Facilities & Office", "Travel & Expenses"],
+    },
+    # ── European & German business ────────────────────────────────────────────
+    {
+        "name": "Handelsblatt",
+        "url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
+        "categories": ["Facilities & Office", "Professional Services", "Real Estate",
+                       "Recruitment & HR", "Travel & Expenses"],
+    },
+    {
+        "name": "WirtschaftsWoche",
+        "url": "https://www.wiwo.de/rss/feed/",
+        "categories": ["Professional Services", "Real Estate", "Recruitment & HR",
+                       "Facilities & Office", "Travel & Expenses"],
+    },
+    {
+        "name": "Euractiv",
+        "url": "https://www.euractiv.com/feed/",
+        "categories": ["Facilities & Office", "Professional Services", "Real Estate", "Travel & Expenses"],
+    },
+    # ── Infrastructure & data centres ─────────────────────────────────────────
+    {
+        "name": "DatacenterDynamics",
+        "url": "https://www.datacenterdynamics.com/en/rss/",
+        "categories": ["Cloud & Compute", "Facilities & Office", "Hardware & Equipment"],
+    },
+    # ── Commodity & energy pricing ────────────────────────────────────────────
+    {
+        "name": "OilPrice",
+        "url": "https://oilprice.com/rss/main",
+        "categories": ["Facilities & Office", "Travel & Expenses", "Hardware & Equipment"],
+    },
+    # ── HR & freelancer markets ───────────────────────────────────────────────
+    {
         "name": "FreelancerMap",
         "url": "https://www.freelancermap.de/blog/feed/",
         "categories": ["Recruitment & HR"],
     },
+    # ── Travel ────────────────────────────────────────────────────────────────
     {
         "name": "Business Travel News",
         "url": "https://www.businesstravelnews.com/rss",
@@ -354,7 +403,8 @@ _GROK_CLUSTERS = [
         "query": (
             "latest news about cloud computing pricing, SaaS vendor consolidation, "
             "AI API costs, semiconductor supply, hardware shortages, telecom regulation — "
-            "anything that affects corporate procurement or IT spend decisions"
+            "include insights from Gartner, McKinsey, Deloitte, PwC, KPMG, BCG on IT spend trends. "
+            "Anything that affects corporate procurement or IT spend decisions."
         ),
     },
     {
@@ -363,7 +413,8 @@ _GROK_CLUSTERS = [
         "query": (
             "latest news about freelancer market, contractor rates, professional services pricing, "
             "consulting firm M&A, marketing agency fees, recruitment costs — "
-            "anything that affects procurement of external labour and services"
+            "include McKinsey, Deloitte, PwC, KPMG, BCG, Mercer reports on workforce and outsourcing trends. "
+            "Anything that affects procurement of external labour and professional services."
         ),
     },
     {
@@ -371,11 +422,31 @@ _GROK_CLUSTERS = [
         "categories": ["Facilities & Office", "Real Estate", "Travel & Expenses"],
         "query": (
             "latest news about commercial real estate, office lease rates, corporate travel costs, "
-            "airline pricing, hotel rates, facilities management — "
-            "anything relevant to corporate facility and travel procurement"
+            "airline pricing, hotel rates, facilities management, energy costs for offices — "
+            "include JLL, CBRE, Deloitte, PwC real estate and corporate travel outlooks. "
+            "Anything relevant to corporate facility and travel procurement."
+        ),
+    },
+    {
+        "name": "Procurement Strategy & Regulation",
+        "categories": ["Professional Services", "IT Software & SaaS", "Cloud & Compute",
+                       "Hardware & Equipment", "Facilities & Office"],
+        "query": (
+            "latest procurement strategy reports, supply chain risk alerts, vendor concentration risk, "
+            "EU AI Act and GDPR implications for software procurement, tariffs and trade policy affecting "
+            "corporate spend — include ISM reports, Spend Matters analysis, McKinsey Operations, "
+            "Deloitte CFO insights, PwC procurement benchmarks, KPMG supply chain reports."
         ),
     },
 ]
+
+# ── Scan profiles ─────────────────────────────────────────────────────────────
+# small: fast, cheap (~$0.05/scan) — 5 articles per feed, no Grok live search
+# big:   thorough (~$0.13/scan)    — 15 articles per feed + all 4 Grok clusters
+SCAN_PROFILES = {
+    "small": {"articles_per_feed": 5,  "use_grok": False},
+    "big":   {"articles_per_feed": 15, "use_grok": True},
+}
 
 
 def _fetch_grok_articles(client_categories: list) -> list:
@@ -412,16 +483,12 @@ def _fetch_grok_articles(client_categories: list) -> list:
         )
 
         try:
-            resp = grok.chat.completions.create(
+            resp = grok.responses.create(
                 model="grok-3-mini",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1500,
-                timeout=20,
-                # xAI live-search: pass via extra_body so the OpenAI SDK
-                # doesn't reject the unknown parameter
-                extra_body={"search_parameters": {"mode": "on", "return_citations": True}},
+                input=[{"role": "user", "content": prompt}],
+                tools=[{"type": "web_search"}],
             )
-            raw = resp.choices[0].message.content or ""
+            raw = resp.output_text or ""
             items = _parse_json(raw)
             if not isinstance(items, list):
                 return []
@@ -459,11 +526,16 @@ def _fetch_grok_articles(client_categories: list) -> list:
 
 # ── Scraping ──────────────────────────────────────────────────────────────────
 
-def fetch_articles(client_categories):
+def fetch_articles(client_categories, mode="small"):
     """
     Fetch articles from RSS feeds relevant to client's spend categories.
+    mode="small": 5 articles/feed, no Grok (~$0.05/scan, ~8s)
+    mode="big":   15 articles/feed + all Grok clusters (~$0.13/scan, ~12s)
     All feeds are fetched in parallel. Returns deduplicated list of article dicts.
     """
+    profile   = SCAN_PROFILES.get(mode, SCAN_PROFILES["small"])
+    per_feed  = profile["articles_per_feed"]
+    use_grok  = profile["use_grok"]
     client_cat_set = set(client_categories)
 
     def _fetch_feed(feed_cfg):
@@ -476,7 +548,7 @@ def fetch_articles(client_categories):
                 agent="Mozilla/5.0 (compatible; SpendLens/1.0; procurement intelligence)"
             )
             results = []
-            for entry in feed.entries[:10]:
+            for entry in feed.entries[:per_feed]:
                 pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
                 if pub_parsed:
                     pub_str = datetime(*pub_parsed[:6], tzinfo=timezone.utc).isoformat()
@@ -495,23 +567,23 @@ def fetch_articles(client_categories):
             print(f"[Icarus] Feed error ({feed_cfg['name']}): {e}")
             return []
 
-    # Fetch RSS feeds and Grok live-search concurrently.
-    # Grok runs in a separate thread while RSS feeds fan out in their own pool.
+    # Fetch RSS feeds; optionally also run Grok live-search concurrently.
     articles = []
     grok_result: list = []
 
-    def _run_grok():
-        grok_result.extend(_fetch_grok_articles(client_categories))
-
-    grok_thread = threading.Thread(target=_run_grok, daemon=True)
-    grok_thread.start()
+    if use_grok:
+        def _run_grok():
+            grok_result.extend(_fetch_grok_articles(client_categories))
+        grok_thread = threading.Thread(target=_run_grok, daemon=True)
+        grok_thread.start()
 
     with ThreadPoolExecutor(max_workers=len(RSS_SOURCES)) as executor:
         for feed_articles in executor.map(_fetch_feed, RSS_SOURCES):
             articles.extend(feed_articles)
 
-    grok_thread.join(timeout=25)   # wait up to 25 s for Grok (RSS is already done)
-    articles.extend(grok_result)
+    if use_grok:
+        grok_thread.join(timeout=25)
+        articles.extend(grok_result)
 
     # Deduplicate by URL first, then headline
     seen_urls: set = set()
@@ -561,7 +633,7 @@ def _analyze_batch(batch, client_categories, client_name):
         client = Anthropic()
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            max_tokens=4000,
             messages=[{"role": "user", "content": prompt}],
         )
         return _parse_json(resp.content[0].text.strip())
@@ -823,16 +895,44 @@ Return ONLY valid JSON (no markdown, no extra text):
                 "risk_areas": [], "suggested_terms": [], "next_steps": []}
 
 
+# ── Document summarisation ───────────────────────────────────────────────────
+
+def summarize_doc(filename: str, text: str) -> str:
+    """
+    Summarise a document with Haiku in ~800 tokens.
+    Focuses on procurement-relevant content: prices, dates, vendors,
+    contract terms, obligations, renewal/termination clauses.
+    Input is capped at 100k chars (~25k tokens) to stay within context.
+    """
+    truncated = text[:100_000]
+    prompt = (
+        f"Document: {filename}\n\n{truncated}\n\n"
+        "Summarise this document in 600-800 tokens. Focus on: contract terms, "
+        "prices and pricing structures, dates (start, end, renewal, termination), "
+        "vendor and counterparty names, key obligations, SLAs, and any data "
+        "relevant to procurement decisions. Be specific — include actual figures, "
+        "names, and dates. Write in plain prose, no headers."
+    )
+    client = Anthropic()
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=900,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return resp.content[0].text.strip()
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def run(client_categories=None, client_name="Client"):
+def run(client_categories=None, client_name="Client", mode="small"):
     """
-    Main Icarus function — called by the dashboard when user clicks 'Ask Icarus'.
-    
+    Main Icarus scan — called by the dashboard scan buttons.
+
     Args:
         client_categories: list of spend category names active for this client
         client_name: display name for the client
-    
+        mode: "small" (quick, ~$0.05) or "big" (deep, ~$0.13 + Grok)
+
     Returns:
         dict with keys: signals (list), query_id (int), article_count (int)
     """
@@ -844,11 +944,11 @@ def run(client_categories=None, client_name="Client"):
             "Hardware", "Facilities", "Logistics"
         ]
 
-    print(f"[Icarus 🪶] Scanning feeds for: {', '.join(client_categories)}")
+    print(f"[Icarus 🪶] Scanning feeds ({mode}) for: {', '.join(client_categories)}")
 
     # 1. Fetch articles
-    articles = fetch_articles(client_categories)
-    print(f"[Icarus] Fetched {len(articles)} articles from {len(RSS_SOURCES)} sources")
+    articles = fetch_articles(client_categories, mode=mode)
+    print(f"[Icarus] Fetched {len(articles)} articles from {len(RSS_SOURCES)} sources (mode={mode})")
 
     # 2. Analyze with Claude
     signals = analyze_with_claude(articles, client_categories, client_name)
@@ -903,8 +1003,13 @@ def run(client_categories=None, client_name="Client"):
 
 if __name__ == "__main__":
     result = run(
-        client_categories=["Cloud & Compute", "Hardware", "Facilities", "Professional Services"],
-        client_name="Test Client"
+        client_categories=[
+            "Cloud & Compute", "AI/ML APIs & Data", "IT Software & SaaS", "Telecom & Voice",
+            "Recruitment & HR", "Professional Services", "Marketing & Campaigns",
+            "Facilities & Office", "Real Estate", "Hardware & Equipment", "Travel & Expenses",
+        ],
+        client_name="SpendLens",
+        mode="big",
     )
     print(f"\n{'─'*60}")
     print(f"🪶 Icarus returned {len(result['signals'])} signals from {result['article_count']} articles\n")

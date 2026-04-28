@@ -443,6 +443,54 @@ def _build_weekly_loading_html() -> str:
 </div>"""
 
 
+# ── Static JS pane — defined once, never re-rendered ─────────────────────────
+# Panel updates HTML panes via innerHTML; browsers do NOT re-execute <script> tags
+# injected that way. Defining all onclick functions here (in a pane initialized
+# once at page load) keeps them in window scope for the lifetime of the session.
+_ICARUS_JS = """<script>
+function toggleCard(idx){
+  var body=document.getElementById('body-'+idx);
+  var chev=document.getElementById('chev-'+idx);
+  if(!body)return;
+  var open=body.classList.toggle('open');
+  if(chev)chev.style.transform=open?'rotate(180deg)':'';
+}
+
+function toggleSection(cid){
+  var body=document.getElementById('secbody-'+cid);
+  var chev=document.getElementById('sechev-'+cid);
+  if(!body)return;
+  var collapsed=body.classList.toggle('collapsed');
+  if(chev)chev.style.transform=collapsed?'rotate(-90deg)':'';
+}
+
+function filterCat(tab,cat){
+  document.querySelectorAll('.cat-tab').forEach(function(t){t.classList.remove('active');});
+  tab.classList.add('active');
+  document.querySelectorAll('.cat-section').forEach(function(sec){
+    sec.style.display=(cat==='all'||sec.dataset.cat===cat)?'block':'none';
+  });
+  var em=document.getElementById('emptyMsg');
+  if(em){
+    var vis=[].slice.call(document.querySelectorAll('.cat-section'))
+              .filter(function(s){return s.style.display!=='none';}).length;
+    em.classList.toggle('visible',vis===0&&cat!=='all');
+  }
+}
+
+function icarusFeedback(sigId,idx,value){
+  var y=document.getElementById('fb-yes-'+idx);
+  var n=document.getElementById('fb-no-'+idx);
+  if(y)y.classList.toggle('selected-yes',value==='relevant');
+  if(n)n.classList.toggle('selected-no',value==='not_relevant');
+  try{
+    var bridge=Bokeh.documents[0].get_model_by_name('icarus_feedback_bridge');
+    if(bridge){bridge.value=sigId+':'+value;}
+  }catch(e){}
+}
+</script>"""
+
+
 # ── Card / section HTML builders ──────────────────────────────────────────────
 
 def build_cat_tabs(signals, active_cat="all"):
@@ -508,7 +556,7 @@ def build_signal_card(s, idx):
 </div>"""
 
 
-def _build_header_html(signals=None, loading=False, status_text=None):
+def _build_header_html(signals=None, loading=False, status_text=None, active_cat="all"):
     if signals is None:
         signals = []
     logo         = LOGO_SVG_LOADING if loading else LOGO_SVG_IDLE
@@ -524,7 +572,7 @@ def _build_header_html(signals=None, loading=False, status_text=None):
     </div>
     <span class="status-badge {status_class}">{status_text}</span>
   </div>
-  {build_cat_tabs(signals)}
+  {build_cat_tabs(signals, active_cat=active_cat)}
 </div>"""
 
 
@@ -586,50 +634,15 @@ def _build_cards_html(signals=None, loading=False):
   <div class="empty-msg" id="emptyMsg"></div>
 </div>
 
-<script>
-function toggleCard(idx){{
-  var body=document.getElementById('body-'+idx);
-  var chev=document.getElementById('chev-'+idx);
-  if(!body)return;
-  var open=body.classList.toggle('open');
-  if(chev)chev.style.transform=open?'rotate(180deg)':'';
-}}
+"""
 
-function toggleSection(cid){{
-  var body=document.getElementById('secbody-'+cid);
-  var chev=document.getElementById('sechev-'+cid);
-  if(!body)return;
-  var collapsed=body.classList.toggle('collapsed');
-  if(chev)chev.style.transform=collapsed?'rotate(-90deg)':'';
-}}
 
-function filterCat(tab,cat){{
-  document.querySelectorAll('.cat-tab').forEach(function(t){{t.classList.remove('active');}});
-  tab.classList.add('active');
-  document.querySelectorAll('.cat-section').forEach(function(sec){{
-    var match=(cat==='all'||sec.dataset.cat===cat);
-    sec.style.display=match?'block':'none';
-  }});
-  var em=document.getElementById('emptyMsg');
-  if(em){{
-    var vis=[].slice.call(document.querySelectorAll('.cat-section'))
-              .filter(function(s){{return s.style.display!=='none';}}).length;
-    em.textContent=vis===0&&cat!=='all'?'No signals for this category.':'';
-    em.classList.toggle('visible',vis===0&&cat!=='all');
-  }}
-}}
-
-function icarusFeedback(sigId,idx,value){{
-  var y=document.getElementById('fb-yes-'+idx);
-  var n=document.getElementById('fb-no-'+idx);
-  if(y)y.classList.toggle('selected-yes',value==='relevant');
-  if(n)n.classList.toggle('selected-no',value==='not_relevant');
-  try{{
-    var bridge=Bokeh.documents[0].get_model_by_name('icarus_feedback_bridge');
-    if(bridge){{bridge.value=sigId+':'+value;}}
-  }}catch(e){{}}
-}}
-</script>"""
+def _build_main_html(signals=None, loading=False, active_cat="all"):
+    """Single HTML pane combining header + cards so filterCat JS can reach all elements."""
+    return (
+        _build_header_html(signals or [], loading, active_cat=active_cat)
+        + _build_cards_html(signals or [], loading)
+    )
 
 
 # ── Panel Component ───────────────────────────────────────────────────────────
@@ -643,8 +656,10 @@ class IcarusPanel(param.Parameterized):
         self._signals      = []
         self._loading      = False
         self._last_query   = ""
-        self._header_pane  = pn.pane.HTML(_build_header_html(),  sizing_mode="stretch_width")
-        self._cards_pane   = pn.pane.HTML(_build_cards_html(),   sizing_mode="stretch_width")
+        self._active_cat   = "all"
+        self._js_pane      = pn.pane.HTML(_ICARUS_JS, height=0, margin=0)
+        self._header_pane  = pn.pane.HTML(_build_header_html([]), sizing_mode="stretch_width")
+        self._cards_pane   = pn.pane.HTML(_build_cards_html([]), sizing_mode="stretch_width")
         self._result_pane  = pn.pane.HTML(
             _build_result_placeholder_html(),
             sizing_mode="stretch_width",
@@ -658,6 +673,7 @@ class IcarusPanel(param.Parameterized):
             stylesheets=[":host{display:none!important;}"],
         )
         self._feedback_bridge.param.watch(self._on_feedback, "value")
+
 
         # In-memory document store — cleared automatically on every page refresh
         self._docs       = []   # list of {id, filename, text, char_count, uploaded_at}
@@ -697,12 +713,13 @@ class IcarusPanel(param.Parameterized):
         self._refresh_doc_list()
 
     def _set_loading(self, loading: bool):
-        self._loading = loading
+        self._loading    = loading
+        self._active_cat = "all"
         self._header_pane.object = _build_header_html(self._signals, loading)
         self._cards_pane.object  = _build_cards_html(self._signals, loading)
 
-    def scan(self):
-        """Trigger full RSS crawl — no query context."""
+    def scan(self, mode="small"):
+        """Trigger RSS crawl. mode='small' (quick) or 'big' (deep + Grok)."""
         if self._loading:
             return
         self._last_query = ""
@@ -715,6 +732,7 @@ class IcarusPanel(param.Parameterized):
                 result = icarus.run(
                     client_categories=self.client_categories,
                     client_name=self.client_name,
+                    mode=mode,
                 )
                 self._signals = result.get("signals", [])
                 recent = icarus.get_recent_signals(limit=50)
@@ -731,7 +749,7 @@ class IcarusPanel(param.Parameterized):
     def run(self, query: str = ""):
         """Dispatch: full scan if empty, RFP brief if RFP intent, else targeted query."""
         if not query.strip():
-            self.scan()
+            self.scan(mode="small")
             return
         if self._loading:
             return
@@ -771,6 +789,7 @@ class IcarusPanel(param.Parameterized):
             finally:
                 self._loading = False
                 self._header_pane.object = _build_header_html(self._signals, loading=False)
+                self._cards_pane.object  = _build_cards_html(self._signals, loading=False)
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -843,17 +862,20 @@ class IcarusPanel(param.Parameterized):
             kc   = f"{doc['char_count']:,}"
             date = _fmt_date(doc.get("uploaded_at", ""))
             fname = escape(doc["filename"])
+            badge = (' <span style="font-size:9px;background:#0F6E56;color:#fff;'
+                     'border-radius:3px;padding:1px 4px;">AI summary</span>'
+                     if doc.get("summary") else "")
             rows += (
                 f'<div class="doc-item">'
                 f'<span class="doc-icon">{icon}</span>'
-                f'<span class="doc-name" title="{fname}">{fname}</span>'
+                f'<span class="doc-name" title="{fname}">{fname}{badge}</span>'
                 f'<span class="doc-meta">{kc} chars &middot; {date}</span>'
                 f'</div>'
             )
         self._doc_list.object = f'{_CSS}{rows}'
 
     def _upload_docs(self):
-        """Handle FileInput upload — extract text into in-memory store."""
+        """Handle FileInput upload — extract text, summarise large docs in parallel."""
         if not self._file_input.value:
             return
         values    = self._file_input.value
@@ -861,38 +883,88 @@ class IcarusPanel(param.Parameterized):
         if not isinstance(values, list):
             values, filenames = [values], [filenames]
 
-        uploaded, errors = [], []
+        # Step 1: extract text from all files synchronously
+        extracted, errors = [], []
         for content, filename in zip(values, filenames):
             try:
                 text = icarus.extract_text(filename, content)
                 self._next_doc_id += 1
-                self._docs.append({
+                extracted.append({
                     "id":          self._next_doc_id,
                     "filename":    filename,
                     "text":        text,
+                    "summary":     None,
                     "char_count":  len(text),
                     "uploaded_at": datetime.now(timezone.utc).isoformat(),
                 })
-                uploaded.append(filename)
             except Exception as e:
                 errors.append(f"{filename}: {e}")
                 print(f"[IcarusPanel] upload error: {e}")
 
-        if uploaded:
-            names = ", ".join(uploaded)
-            self._doc_status.object = (
-                f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:2px 0 4px;">'
-                f'✓ {names} — Icarus will use this in your next query</div>'
-            )
-            self._doc_status.visible = True
-        if errors:
-            self._doc_status.object = (
-                f'{_CSS}<div style="font-size:11px;color:#E24B4A;padding:2px 0;">'
-                f'⚠ Could not read: {"; ".join(errors)}</div>'
-            )
-            self._doc_status.visible = True
+        if not extracted:
+            if errors:
+                self._doc_status.object = (
+                    f'{_CSS}<div style="font-size:11px;color:#E24B4A;padding:2px 0;">'
+                    f'⚠ Could not read: {"; ".join(errors)}</div>'
+                )
+                self._doc_status.visible = True
+            self._file_input.value    = None
+            self._file_input.filename = None
+            return
+
+        self._docs.extend(extracted)
+        self._refresh_doc_list()
         self._file_input.value    = None
         self._file_input.filename = None
+
+        # Step 2: summarise large docs in background (parallel Haiku calls)
+        large = [d for d in extracted if d["char_count"] > 2_000]
+        if not large:
+            names = ", ".join(d["filename"] for d in extracted)
+            self._doc_status.object = (
+                f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:2px 0 4px;">'
+                f'✓ {names} — ready</div>'
+            )
+            self._doc_status.visible = True
+            return
+
+        n = len(large)
+        self._doc_status.object = (
+            f'{_CSS}<div style="font-size:11px;color:#888;padding:2px 0 4px;">'
+            f'Summarising {n} doc{"s" if n > 1 else ""} with AI…</div>'
+        )
+        self._doc_status.visible = True
+
+        def _summarise_all():
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def _summarise_one(doc):
+                try:
+                    doc["summary"] = icarus.summarize_doc(doc["filename"], doc["text"])
+                except Exception as e:
+                    print(f"[IcarusPanel] summarise error ({doc['filename']}): {e}")
+
+            with ThreadPoolExecutor(max_workers=10) as ex:
+                futures = [ex.submit(_summarise_one, d) for d in large]
+                for f in as_completed(futures):
+                    f.result()
+
+            names = ", ".join(d["filename"] for d in extracted)
+            errs  = [d["filename"] for d in large if d["summary"] is None]
+            if errs:
+                self._doc_status.object = (
+                    f'{_CSS}<div style="font-size:11px;color:#E24B4A;padding:2px 0;">'
+                    f'⚠ Summary failed for: {", ".join(errs)}</div>'
+                )
+            else:
+                self._doc_status.object = (
+                    f'{_CSS}<div style="font-size:11px;color:#0F6E56;padding:2px 0 4px;">'
+                    f'✓ {names} — summarised & ready</div>'
+                )
+            self._doc_status.visible = True
+            self._refresh_doc_list()
+
+        threading.Thread(target=_summarise_all, daemon=True).start()
 
     def _on_file_selected(self, event):
         """Triggered automatically when FileInput value changes."""
@@ -913,19 +985,27 @@ class IcarusPanel(param.Parameterized):
         self._refresh_doc_list()
 
     def _get_doc_context(self) -> list:
-        """Return document excerpts for use in Claude prompts (empty list if none)."""
+        """
+        Return document context for Claude prompts.
+        Uses AI summary when available (large docs), otherwise full text.
+        Supports up to 100 docs — summaries keep total tokens manageable.
+        """
         result = []
-        for doc in self._docs[-5:]:
-            excerpt = doc["text"][:4000]
-            if len(doc["text"]) > 4000:
-                excerpt += f"\n[… truncated — {len(doc['text']):,} chars total]"
-            result.append(f"[{doc['filename']}]\n{excerpt}")
+        for doc in self._docs:
+            if doc.get("summary"):
+                result.append(f"[{doc['filename']} — AI summary]\n{doc['summary']}")
+            else:
+                excerpt = doc["text"][:4000]
+                if len(doc["text"]) > 4000:
+                    excerpt += f"\n[… truncated — {len(doc['text']):,} chars total]"
+                result.append(f"[{doc['filename']}]\n{excerpt}")
         return result
 
     def load_recent(self):
-        self._signals = icarus.get_recent_signals(limit=50)
-        self._header_pane.object = _build_header_html(self._signals, loading=False)
-        self._cards_pane.object  = _build_cards_html(self._signals, loading=False)
+        self._signals    = icarus.get_recent_signals(limit=50)
+        self._active_cat = "all"
+        self._header_pane.object = _build_header_html(self._signals)
+        self._cards_pane.object  = _build_cards_html(self._signals)
 
     def _on_feedback(self, event):
         """Called when JS sets _feedback_bridge.value to 'sigId:feedback'."""
@@ -990,18 +1070,30 @@ class IcarusPanel(param.Parameterized):
         )
 
         # ── Compact quick-action pills ─────────────────────────────────────────
-        scan_pill = pn.widgets.Button(
-            name="🔍 Scan internet for information",
+        _pill_base = """
+            .bk-btn{height:24px;padding:0 10px;border-radius:99px;font-size:11px;
+              font-weight:600;white-space:nowrap;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+        """
+        quick_scan_pill = pn.widgets.Button(
+            name="🔍 Quick Scan",
             button_type="light",
-            stylesheets=["""
-                .bk-btn{height:24px;padding:0 10px;border-radius:99px;font-size:11px;
-                  font-weight:600;white-space:nowrap;border:1px solid #d0d8e8;
-                  color:#1B3A6B;background:white;
-                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+            stylesheets=[_pill_base + """
+                .bk-btn{border:1px solid #d0d8e8;color:#1B3A6B;background:white;}
                 .bk-btn:hover{background:#EFF3FB;border-color:#1B3A6B;}
             """],
         )
-        scan_pill.on_click(lambda e: self.scan())
+        quick_scan_pill.on_click(lambda e: self.scan(mode="small"))
+
+        deep_scan_pill = pn.widgets.Button(
+            name="🌐 Deep Scan",
+            button_type="light",
+            stylesheets=[_pill_base + """
+                .bk-btn{border:1px solid #1B3A6B;color:white;background:#1B3A6B;}
+                .bk-btn:hover{background:#162d57;border-color:#162d57;}
+            """],
+        )
+        deep_scan_pill.on_click(lambda e: self.scan(mode="big"))
 
         weekly_pill = pn.widgets.Button(
             name="📋 Weekly Brief",
@@ -1025,7 +1117,7 @@ class IcarusPanel(param.Parameterized):
         )
 
         action_row = pn.Row(
-            scan_pill, weekly_pill, hint_text,
+            quick_scan_pill, deep_scan_pill, weekly_pill, hint_text,
             align="center", sizing_mode="stretch_width",
             styles={"padding": "6px 18px", "background": "#fafafa",
                     "border-bottom": "1px solid #f0f0f0", "gap": "8px"},
@@ -1049,12 +1141,13 @@ class IcarusPanel(param.Parameterized):
         enter_key = pn.pane.HTML(_ENTER_KEY_HTML, height=0, margin=0)
 
         return pn.Column(
-            self._header_pane,
+            self._js_pane,
             input_row,
             action_row,
             doc_section,
             enter_key,
             self._result_pane,
+            self._header_pane,
             self._cards_pane,
             self._feedback_bridge,
             sizing_mode="stretch_width",
