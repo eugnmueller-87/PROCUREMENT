@@ -76,6 +76,12 @@ Every stage is designed to handle the reality of enterprise data — missing fie
 
 <img src="docs/screenshots/procurement-health.png" width="800" alt="Procurement health gauges — PO coverage, contract coverage, maverick spend, expiring contracts">
 
+### Supplier Compliance Scorecard
+
+ABC supplier tiers are auto-computed from spend (A = top 80%, B = next 15%, C = remainder) with a criticality bump for sole-source or Critical-risk suppliers. Each card shows compliance score (PO coverage 35% · contract coverage 35% · concentration 20% · maverick 10%), contract status at a glance (🟢 Under Contract · 🟡 Expiring Soon · 🔴 No Contract / Expired), score trend vs previous evaluation, and relationship status. Click any card to expand inline editing of Category, Tier, and Relationship — changes persist to SQLite and back-propagate to the vendor classification cache.
+
+<img src="docs/screenshots/scorecard.png" width="800" alt="Supplier Compliance Scorecard — EcoVadis-style card list with ABC tiers, compliance scores, contract status icons and inline editing">
+
 ### Persistent Knowledge Base
 
 SpendLens never overwrites previous data. Every upload appends to a transaction timeline. Vendor classifications, spend patterns, and compliance flags accumulate over time.
@@ -210,7 +216,7 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | Icarus — ICARUS AI data interpretation per chart | ✅ Live |
 | Icarus — Period-aware spend insight bullets | ✅ Live |
 | Icarus — Feedback learning loop | 🔨 In progress |
-| Compliance Scorecard tab | 📋 Planned |
+| Compliance Scorecard tab — EcoVadis-style cards, ABC tiers, inline editing | ✅ Live |
 | Spend Variance Analysis | 📋 Planned |
 | Supplier Risk Score | 📋 Planned |
 | Spend Forecast (Q+1) | 📋 Planned |

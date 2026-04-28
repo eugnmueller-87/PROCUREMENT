@@ -123,28 +123,35 @@ def init_supplier_profiles(conn: sqlite3.Connection) -> None:
     """Create supplier_profiles table if it doesn't exist."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS supplier_profiles (
-            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_name          TEXT NOT NULL,
-            vendor_name          TEXT NOT NULL,
-            category             TEXT,
-            tier                 TEXT,
-            tier_computed        TEXT,
-            tier_override        TEXT,
-            relationship_status  TEXT,
-            total_spend          REAL DEFAULT 0,
-            po_coverage_pct      REAL DEFAULT 0,
-            contract_status      TEXT DEFAULT 'Unknown',
-            contract_end         TEXT,
-            risk_level           TEXT DEFAULT 'Medium',
-            single_source        INTEGER DEFAULT 0,
-            compliance_score     REAL DEFAULT 0,
-            last_updated         TEXT,
+            id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_name               TEXT NOT NULL,
+            vendor_name               TEXT NOT NULL,
+            category                  TEXT,
+            tier                      TEXT,
+            tier_computed             TEXT,
+            tier_override             TEXT,
+            relationship_status       TEXT,
+            total_spend               REAL DEFAULT 0,
+            po_coverage_pct           REAL DEFAULT 0,
+            contract_status           TEXT DEFAULT 'Unknown',
+            contract_end              TEXT,
+            risk_level                TEXT DEFAULT 'Medium',
+            single_source             INTEGER DEFAULT 0,
+            compliance_score          REAL DEFAULT 0,
+            previous_compliance_score REAL DEFAULT 0,
+            last_updated              TEXT,
             UNIQUE(client_name, vendor_name)
         )
     """)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sp_client ON supplier_profiles(client_name)"
     )
+    try:
+        conn.execute(
+            "ALTER TABLE supplier_profiles ADD COLUMN previous_compliance_score REAL DEFAULT 0"
+        )
+    except Exception:
+        pass  # column already exists on existing databases
     conn.commit()
 
 
@@ -152,7 +159,7 @@ def upsert_supplier_profile(conn: sqlite3.Connection, client_name: str,
                              record: dict) -> None:
     """Insert or update a single supplier profile. tier_override is preserved if already set."""
     existing = conn.execute(
-        "SELECT tier_override, relationship_status FROM supplier_profiles "
+        "SELECT tier_override, relationship_status, compliance_score FROM supplier_profiles "
         "WHERE client_name=? AND vendor_name=?",
         (client_name, record["vendor_name"])
     ).fetchone()
@@ -161,13 +168,16 @@ def upsert_supplier_profile(conn: sqlite3.Connection, client_name: str,
                 else record.get("tier_override"))
     rel_status = (existing["relationship_status"] if existing and existing["relationship_status"]
                   else record.get("relationship_status"))
+    prev_score = (float(existing["compliance_score"])
+                  if existing and existing["compliance_score"] is not None else 0.0)
 
     conn.execute("""
         INSERT INTO supplier_profiles
             (client_name, vendor_name, category, tier, tier_computed, tier_override,
              relationship_status, total_spend, po_coverage_pct, contract_status,
-             contract_end, risk_level, single_source, compliance_score, last_updated)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             contract_end, risk_level, single_source, compliance_score,
+             previous_compliance_score, last_updated)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(client_name, vendor_name) DO UPDATE SET
             category=excluded.category,
             tier=excluded.tier,
@@ -180,6 +190,7 @@ def upsert_supplier_profile(conn: sqlite3.Connection, client_name: str,
             contract_end=excluded.contract_end,
             risk_level=excluded.risk_level,
             single_source=excluded.single_source,
+            previous_compliance_score=supplier_profiles.compliance_score,
             compliance_score=excluded.compliance_score,
             last_updated=excluded.last_updated
     """, (
@@ -197,6 +208,7 @@ def upsert_supplier_profile(conn: sqlite3.Connection, client_name: str,
         record.get("risk_level", "Medium"),
         int(bool(record.get("single_source", False))),
         record.get("compliance_score", 0),
+        prev_score,
         datetime.now().isoformat()[:10],
     ))
     conn.commit()
@@ -278,7 +290,8 @@ def get_supplier_profiles(conn: sqlite3.Connection,
         df = pd.read_sql_query("""
             SELECT vendor_name, category, tier, relationship_status,
                    total_spend, po_coverage_pct, contract_status,
-                   contract_end, risk_level, single_source, compliance_score
+                   contract_end, risk_level, single_source, compliance_score,
+                   previous_compliance_score
             FROM supplier_profiles
             WHERE client_name=?
             ORDER BY total_spend DESC
@@ -301,20 +314,26 @@ def build_demo_profiles() -> pd.DataFrame:
             r["po_coverage_pct"], r["contract_status"],
             r["single_source"], r["risk_level"]
         )
+        tier = r["tier"]
+        # Simulate realistic score trends for demo data: A improving, C declining
+        prev = (max(0.0, score - 4.0) if tier == "A"
+                else min(100.0, score + 5.0) if tier == "C"
+                else score)
         rows.append({
-            "vendor_name":         r["vendor_name"],
-            "category":            r["category"],
-            "tier":                r["tier"],
-            "relationship_status": suggest_relationship_status(
-                r["tier"], r["risk_level"], r["contract_status"], r["single_source"]
+            "vendor_name":              r["vendor_name"],
+            "category":                 r["category"],
+            "tier":                     tier,
+            "relationship_status":      suggest_relationship_status(
+                tier, r["risk_level"], r["contract_status"], r["single_source"]
             ),
-            "total_spend":         r["total_spend"],
-            "po_coverage_pct":     r["po_coverage_pct"],
-            "contract_status":     r["contract_status"],
-            "contract_end":        r["contract_end"],
-            "risk_level":          r["risk_level"],
-            "single_source":       r["single_source"],
-            "compliance_score":    score,
+            "total_spend":              r["total_spend"],
+            "po_coverage_pct":          r["po_coverage_pct"],
+            "contract_status":          r["contract_status"],
+            "contract_end":             r["contract_end"],
+            "risk_level":               r["risk_level"],
+            "single_source":            r["single_source"],
+            "compliance_score":         score,
+            "previous_compliance_score": prev,
         })
     return pd.DataFrame(rows)
 

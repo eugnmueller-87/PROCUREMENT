@@ -1416,29 +1416,40 @@ def refresh_all_insights():
 # COMPLIANCE SCORECARD TAB
 # ─────────────────────────────────────────────────────────────────────────────
 
-_RISK_BADGE  = {"Critical": RED, "High": YELLOW, "Medium": "#E67E22", "Low": GREEN}
+from datetime import date as _date
+from html import escape as _esc
 
-# Holds the current supplier DataFrame shown in the tab
+_RISK_BADGE = {"Critical": RED, "High": YELLOW, "Medium": "#E67E22", "Low": GREEN}
+
 _sc_df: pd.DataFrame = build_demo_profiles()
 
-# Panes updated by refresh functions
-_sc_score_pane  = pn.pane.HTML("", sizing_mode="stretch_width")
-_sc_table_pane  = pn.Column(sizing_mode="stretch_width")
-_sc_maverick_pane = pn.pane.Plotly(sizing_mode="stretch_width", config=_NO_MODEBAR)
-_sc_expiry_pane   = pn.pane.Plotly(sizing_mode="stretch_width", config=_NO_MODEBAR)
+_sc_score_pane = pn.pane.HTML("", sizing_mode="stretch_width")
+_sc_cards_pane = pn.pane.HTML("", sizing_mode="stretch_width")
 
-# Active tier filter ("All", "A", "B", "C")
-_sc_tier_filter = pn.widgets.ToggleGroup(
-    name="", options=["All", "A", "B", "C"], value="All",
-    behavior="radio", button_type="light",
-    stylesheets=["""
-        :host{margin:0;}
-        .bk-btn-group{display:flex;gap:6px;}
-        .bk-btn{height:28px;padding:0 14px;border-radius:99px;font-size:12px;
-                font-weight:600;border:1.5px solid #D0DAF0;color:#1B3A6B;
-                background:white;font-family:-apple-system,sans-serif;}
-        .bk-btn.bk-active{background:#1B3A6B;color:white;border-color:#1B3A6B;}
-    """],
+_sc_edit_bridge = pn.widgets.TextInput(
+    name="sc_edit_bridge", value="",
+    stylesheets=[":host{display:none!important;}"],
+)
+
+_sc_cat_filter = pn.widgets.Select(
+    name="Category", value="All",
+    options=["All"] + TAXONOMY,
+    width=190,
+)
+_sc_risk_filter = pn.widgets.Select(
+    name="Risk", value="All",
+    options=["All", "Critical", "High", "Medium", "Low"],
+    width=120,
+)
+_sc_cs_filter = pn.widgets.Select(
+    name="Contract", value="All",
+    options=["All", "Under Contract", "Expiring Soon", "Expired", "No Contract"],
+    width=165,
+)
+_sc_sort = pn.widgets.Select(
+    name="Sort by", value="Score ↓",
+    options=["Score ↓", "Score ↑", "Spend ↓", "Tier A→C", "Expiry ↑"],
+    width=130,
 )
 
 
@@ -1505,141 +1516,273 @@ def _build_sc_score_html(df: pd.DataFrame) -> str:
 </div>"""
 
 
-def _build_supplier_tabulator(df: pd.DataFrame, tier: str = "All") -> pn.widgets.Tabulator:
-    """Build editable Tabulator for the compliance supplier table."""
-    filtered = df if tier == "All" else df[df["tier"] == tier].copy()
-    display = filtered[[
-        "vendor_name", "category", "tier", "relationship_status",
-        "total_spend", "po_coverage_pct", "contract_status",
-        "contract_end", "risk_level", "compliance_score",
-    ]].copy()
-    display.columns = [
-        "Supplier", "Category", "Tier", "Relationship",
-        "Spend €K", "PO %", "Contract", "Expiry", "Risk", "Score",
-    ]
-    display["Spend €K"] = display["Spend €K"].round(0).astype(int)
-    display["PO %"]     = display["PO %"].round(0).astype(int)
-    display["Score"]    = display["Score"].round(1)
-
-    table = pn.widgets.Tabulator(
-        display,
-        sizing_mode="stretch_width",
-        height=420,
-        theme="bootstrap",
-        page_size=20,
-        show_index=False,
-        editors={
-            "Category":     {"type": "select", "values": TAXONOMY},
-            "Relationship": {"type": "select", "values": RELATIONSHIP_OPTIONS},
-            "Tier":         {"type": "select", "values": ["A", "B", "C"]},
-        },
-        frozen_columns=["Supplier"],
-        text_align={"Score": "center", "Tier": "center", "PO %": "center"},
-        widths={
-            "Supplier": 160, "Category": 170, "Tier": 60,
-            "Relationship": 130, "Spend €K": 90, "PO %": 65,
-            "Contract": 130, "Expiry": 95, "Risk": 80, "Score": 70,
-        },
-        stylesheets=["""
-            .tabulator{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                       font-size:12px;border:1px solid #E2E8F0;border-radius:8px;}
-            .tabulator .tabulator-header .tabulator-col{
-                background:#F8F9FA;color:#1B3A6B;font-weight:700;
-                font-size:11px;text-transform:uppercase;letter-spacing:0.5px;}
-            .tabulator .tabulator-row:hover{background:#F0F4FF;}
-        """],
-    )
-
-    def _on_edit(event):
-        global _sc_df
-        col_map = {
-            "Category": "category", "Relationship": "relationship_status", "Tier": "tier"
-        }
-        field = col_map.get(event.column)
-        if not field:
-            return
-        supplier = display.iloc[event.row]["Supplier"]
-        try:
-            conn = get_connection("default")
-            update_supplier_field(conn, "default", supplier, field, event.value)
-            conn.close()
-            _sc_df.loc[_sc_df["vendor_name"] == supplier, field] = event.value
-            _sc_score_pane.object = _build_sc_score_html(_sc_df)
-        except Exception as e:
-            print(f"[Scorecard] edit error: {e}")
-
-    table.on_edit(_on_edit)
-    return table
+def _contract_icon(contract_status: str, contract_end) -> tuple:
+    """Return (emoji, tooltip) for a supplier's contract status."""
+    today = _date.today()
+    if contract_status == "No Contract":
+        return "🔴", "No Contract"
+    if contract_status == "Expired":
+        return "🔴", f"Expired ({contract_end or 'unknown date'})"
+    if contract_status == "Under Contract":
+        ce = str(contract_end or "")
+        if ce and ce not in ("N/A", "Unknown", ""):
+            try:
+                exp = _date.fromisoformat(ce[:10])
+                days = (exp - today).days
+                if days <= 0:
+                    return "🔴", f"Expired ({ce})"
+                if days <= 90:
+                    return "🟡", f"Expiring soon — {days} days left ({ce})"
+                return "🟢", f"Under Contract until {ce}"
+            except Exception:
+                pass
+        return "🟢", "Under Contract"
+    return "🟡", contract_status or "Unknown"
 
 
-def _chart_maverick_trend() -> go.Figure:
-    """Line chart of maverick spend % over 2022–2026 with 5% target line."""
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=YEARS, y=MAVERICK_PCT, mode="lines+markers",
-        name="Maverick Spend", line=dict(color=RED, width=2.5),
-        marker=dict(size=7, color=RED),
-    ))
-    fig.add_trace(go.Scatter(
-        x=[YEARS[0], YEARS[-1]], y=[5, 5], mode="lines",
-        name="Target 5%", line=dict(color=GREEN, width=1.5, dash="dash"),
-    ))
-    fig.add_hrect(y0=5, y1=max(MAVERICK_PCT) + 2,
-                  fillcolor="rgba(192,57,43,0.06)", line_width=0)
-    fig.update_layout(
-        **LAYOUT,
-        title=dict(text="Maverick Spend Trend (%)", font=dict(size=13, color=NAVY)),
-        yaxis=dict(title="% of total spend", ticksuffix="%", range=[0, max(MAVERICK_PCT) + 3]),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=280,
-    )
-    return fig
+_SC_CSS_JS = """<style>
+.sc-card{background:white;border:1px solid #E2E8F0;border-radius:12px;margin:0 0 8px;
+         overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+         transition:box-shadow 0.15s;}
+.sc-card:hover{box-shadow:0 4px 16px rgba(27,58,107,0.1);}
+.sc-hdr{display:flex;align-items:center;gap:12px;padding:13px 18px;cursor:pointer;user-select:none;}
+.sc-tier{width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;
+         display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.sc-tier-A{background:#1B3A6B;color:white;}
+.sc-tier-B{background:#2E5BA8;color:white;}
+.sc-tier-C{background:#8BA0C4;color:white;}
+.sc-rel{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap;flex-shrink:0;}
+.sc-rel-Strategic{background:#EBF5FF;color:#1B3A6B;}
+.sc-rel-Preferred{background:#E8F5E9;color:#1A7A4A;}
+.sc-rel-Approved{background:#FFF8E1;color:#B8860B;}
+.sc-rel-Transactional{background:#F3F4F6;color:#64748B;}
+.sc-expand{display:none;padding:0 18px 16px;border-top:1px solid #F0F4FF;}
+.sc-expand.open{display:block;}
+.sc-chev{font-size:16px;color:#8BA0C4;transition:transform 0.2s;flex-shrink:0;line-height:1;}
+.sc-sel{font-size:12px;border:1px solid #D0DAF0;border-radius:6px;padding:3px 6px;
+        color:#1B3A6B;background:white;cursor:pointer;font-family:-apple-system,sans-serif;width:100%;}
+</style>
+<script>
+function scToggle(id){
+  var exp=document.getElementById('sc-exp-'+id);
+  var chev=document.getElementById('sc-chev-'+id);
+  if(!exp)return;
+  var open=exp.classList.toggle('open');
+  if(chev)chev.style.transform=open?'rotate(90deg)':'';
+}
+function scEditCard(el,field){
+  var card=el.closest('.sc-card');
+  if(!card)return;
+  var vendor=card.dataset.vendor;
+  try{
+    var b=Bokeh.documents[0].get_model_by_name('sc_edit_bridge');
+    if(b)b.value=vendor+'|'+field+'|'+el.value;
+  }catch(e){console.warn('sc_edit_bridge',e);}
+}
+</script>"""
 
 
-def _chart_expiry_gantt() -> go.Figure:
-    """Contract expiry scatter — suppliers plotted by expiry date, sized by value."""
-    rows = [r for r in CONTRACTS_DATA if r["Expiry"] != "N/A"]
-    if not rows:
-        return go.Figure()
-    expiry_dates = [r["Expiry"] for r in rows]
-    suppliers    = [r["Supplier"] for r in rows]
-    values       = [r["Value €K"] for r in rows]
-    risks        = [r["Risk"] for r in rows]
-    colors       = [_RISK_BADGE.get(r, DIM) for r in risks]
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=expiry_dates,
-        y=suppliers,
-        mode="markers+text",
-        marker=dict(
-            size=[max(10, min(v / 300, 40)) for v in values],
-            color=colors, opacity=0.85,
-            line=dict(width=1.5, color="white"),
-        ),
-        text=[f"€{v:,}K" for v in values],
-        textposition="middle right",
-        textfont=dict(size=10, color=TEXT),
-        hovertemplate=(
-            "<b>%{y}</b><br>Expiry: %{x}<br>"
-            + "<br>".join(f"€{v:,}K" for v in values)
-            + "<extra></extra>"
-        ),
-    ))
-    fig.update_layout(
-        **LAYOUT,
-        title=dict(text="Contract Expiry Timeline (bubble = contract value)",
-                   font=dict(size=13, color=NAVY)),
-        xaxis=dict(title="", type="date"),
-        yaxis=dict(title="", autorange="reversed"),
-        height=320,
-        margin=dict(l=130, r=80, t=50, b=40),
-        showlegend=False,
-    )
-    return fig
+def _build_sc_cards_html(df: pd.DataFrame) -> str:
+    """Build the full EcoVadis-style supplier card list as an HTML string."""
+    if df.empty:
+        return (
+            '<div style="padding:40px;text-align:center;color:#64748B;'
+            'font-family:-apple-system,sans-serif;">No suppliers match the current filters.</div>'
+        )
+
+    html = _SC_CSS_JS
+
+    for i, row in df.reset_index(drop=True).iterrows():
+        vendor     = str(row.get("vendor_name", ""))
+        vendor_esc = _esc(vendor)
+        category   = str(row.get("category", "Unknown"))
+        tier       = str(row.get("tier", "C"))
+        rel        = str(row.get("relationship_status", "Transactional"))
+        score      = float(row.get("compliance_score", 0))
+        prev_score = float(row.get("previous_compliance_score", score))
+        spend      = int(float(row.get("total_spend", 0)))
+        risk       = str(row.get("risk_level", "Medium"))
+        po_pct     = int(float(row.get("po_coverage_pct", 0)))
+        cs         = str(row.get("contract_status", "Unknown"))
+        ce         = str(row.get("contract_end") or "")
+        ss         = bool(row.get("single_source", False))
+
+        icon, tip = _contract_icon(cs, ce)
+        risk_color = _RISK_BADGE.get(risk, DIM)
+
+        # Score trend arrow
+        diff = score - prev_score
+        if diff > 0.5:
+            trend = f'<span style="color:#1A7A4A;font-size:12px;margin-left:2px;">↑</span>'
+        elif diff < -0.5:
+            trend = f'<span style="color:#C0392B;font-size:12px;margin-left:2px;">↓</span>'
+        else:
+            trend = f'<span style="color:#8BA0C4;font-size:12px;margin-left:2px;">–</span>'
+
+        sc_color = GREEN if score >= 80 else NAVY2 if score >= 65 else YELLOW if score >= 50 else RED
+
+        # Spend formatting: values are in €K
+        spend_str = f"€{spend/1000:.1f}M" if spend >= 1000 else f"€{spend:,}K"
+
+        # Relationship CSS class (spaces → dashes for CSS)
+        rel_cls = rel.replace(" ", "-")
+
+        # Expiry display
+        ce_display = ce if ce and ce not in ("N/A", "Unknown") else "—"
+
+        # Single-source
+        ss_label = "Yes — sole source" if ss else "No"
+        ss_color = "#C0392B" if ss else "#1A7A4A"
+
+        # Select options
+        cat_opts = "".join(
+            f'<option value="{_esc(c)}"{"  selected" if c == category else ""}>{_esc(c)}</option>'
+            for c in TAXONOMY
+        )
+        tier_opts = "".join(
+            f'<option value="{t}"{"  selected" if t == tier else ""}>{t}</option>'
+            for t in ["A", "B", "C"]
+        )
+        rel_opts = "".join(
+            f'<option value="{_esc(r)}"{"  selected" if r == rel else ""}>{_esc(r)}</option>'
+            for r in RELATIONSHIP_OPTIONS
+        )
+
+        html += f"""
+<div class="sc-card" data-vendor="{vendor_esc}">
+  <div class="sc-hdr" onclick="scToggle({i})">
+    <div class="sc-tier sc-tier-{tier}" title="Tier {tier}">{tier}</div>
+    <div style="flex:1;min-width:0;overflow:hidden;">
+      <div style="font-size:14px;font-weight:700;color:#1B3A6B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{vendor_esc}</div>
+      <div style="font-size:11px;color:#64748B;">{_esc(category)}</div>
+    </div>
+    <span title="{_esc(tip)}" style="font-size:18px;cursor:default;flex-shrink:0;">{icon}</span>
+    <span class="sc-rel sc-rel-{rel_cls}">{_esc(rel)}</span>
+    <div style="text-align:right;min-width:60px;flex-shrink:0;">
+      <div style="font-size:20px;font-weight:800;color:{sc_color};line-height:1.1;">{score:.0f}{trend}</div>
+      <div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;">Score</div>
+    </div>
+    <div style="text-align:right;min-width:64px;flex-shrink:0;">
+      <div style="font-size:13px;font-weight:600;color:#1B3A6B;">{spend_str}</div>
+      <div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;">Spend</div>
+    </div>
+    <div class="sc-chev" id="sc-chev-{i}">›</div>
+  </div>
+  <div class="sc-expand" id="sc-exp-{i}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px;padding:14px 0 6px;">
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">PO Coverage</div>
+        <div style="font-size:18px;font-weight:700;color:#1B3A6B;">{po_pct}%</div>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">Risk Level</div>
+        <div style="font-size:14px;font-weight:700;color:{risk_color};">{_esc(risk)}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">Contract Expiry</div>
+        <div style="font-size:13px;font-weight:600;color:#1B3A6B;">{_esc(ce_display)}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">Single Source</div>
+        <div style="font-size:13px;font-weight:700;color:{ss_color};">{ss_label}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">Category</div>
+        <select class="sc-sel" onchange="scEditCard(this,'category')">{cat_opts}</select>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">Tier Override</div>
+        <select class="sc-sel" onchange="scEditCard(this,'tier')">{tier_opts}</select>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#64748B;letter-spacing:0.5px;margin-bottom:3px;">Relationship</div>
+        <select class="sc-sel" onchange="scEditCard(this,'relationship_status')">{rel_opts}</select>
+      </div>
+    </div>
+  </div>
+</div>"""
+
+    return html
+
+
+def _refresh_sc_cards(*_):
+    """Rebuild card HTML based on current filter and sort settings."""
+    global _sc_df
+    df = _sc_df.copy()
+    cat  = _sc_cat_filter.value
+    risk = _sc_risk_filter.value
+    cs   = _sc_cs_filter.value
+    sort = _sc_sort.value
+
+    if cat != "All":
+        df = df[df["category"] == cat]
+    if risk != "All":
+        df = df[df["risk_level"] == risk]
+
+    if cs == "Expiring Soon":
+        today = _date.today()
+        def _expiring(row):
+            if row["contract_status"] != "Under Contract":
+                return False
+            ce = str(row.get("contract_end") or "")
+            if ce in ("", "N/A", "Unknown"):
+                return False
+            try:
+                return 0 < (_date.fromisoformat(ce[:10]) - today).days <= 90
+            except Exception:
+                return False
+        df = df[df.apply(_expiring, axis=1)]
+    elif cs != "All":
+        df = df[df["contract_status"] == cs]
+
+    if sort == "Score ↓":
+        df = df.sort_values("compliance_score", ascending=False)
+    elif sort == "Score ↑":
+        df = df.sort_values("compliance_score", ascending=True)
+    elif sort == "Spend ↓":
+        df = df.sort_values("total_spend", ascending=False)
+    elif sort == "Tier A→C":
+        _ord = {"A": 0, "B": 1, "C": 2}
+        df = df.assign(_t=df["tier"].map(_ord).fillna(3)).sort_values("_t").drop(columns="_t")
+    elif sort == "Expiry ↑":
+        df = df.assign(
+            _exp=pd.to_datetime(df["contract_end"], errors="coerce")
+        ).sort_values("_exp", na_position="last").drop(columns="_exp")
+
+    _sc_cards_pane.object = _build_sc_cards_html(df)
+
+
+def _on_sc_edit(event):
+    """Handle JS→Python inline edit: 'vendor_name|field|value'."""
+    v = (event.new or "").strip()
+    if not v or "|" not in v:
+        return
+    parts = v.split("|", 2)
+    if len(parts) != 3:
+        return
+    vendor, field, value = parts
+    try:
+        conn = get_connection("default")
+        update_supplier_field(conn, "default", vendor, field, value)
+        conn.close()
+        _sc_df.loc[_sc_df["vendor_name"] == vendor, field] = value
+        _sc_score_pane.object = _build_sc_score_html(_sc_df)
+        _refresh_sc_cards()
+    except Exception as e:
+        print(f"[Scorecard] edit error: {e}")
+    finally:
+        _sc_edit_bridge.value = ""
+
+
+_sc_edit_bridge.param.watch(_on_sc_edit, "value")
+_sc_cat_filter.param.watch(_refresh_sc_cards, "value")
+_sc_risk_filter.param.watch(_refresh_sc_cards, "value")
+_sc_cs_filter.param.watch(_refresh_sc_cards, "value")
+_sc_sort.param.watch(_refresh_sc_cards, "value")
 
 
 def refresh_compliance_tab():
-    """Reload supplier data and redraw all compliance scorecard panes."""
+    """Reload supplier data and redraw the Compliance Scorecard."""
     global _sc_df
     try:
         conn = get_connection("default")
@@ -1647,23 +1790,22 @@ def refresh_compliance_tab():
         conn.close()
     except Exception:
         _sc_df = build_demo_profiles()
-
-    tier = _sc_tier_filter.value
     _sc_score_pane.object = _build_sc_score_html(_sc_df)
-    _sc_table_pane.clear()
-    _sc_table_pane.append(_build_supplier_tabulator(_sc_df, tier))
-    _sc_maverick_pane.object = _chart_maverick_trend()
-    _sc_expiry_pane.object   = _chart_expiry_gantt()
+    _refresh_sc_cards()
 
 
-def _on_tier_filter(event):
-    tier = event.new
-    _sc_table_pane.clear()
-    _sc_table_pane.append(_build_supplier_tabulator(_sc_df, tier))
+_sc_filter_row = pn.Row(
+    pn.pane.HTML(
+        f'<span style="font-size:12px;font-weight:600;color:{NAVY};'
+        f'font-family:-apple-system,sans-serif;line-height:32px;">Filters:</span>',
+        width=55, align="center",
+    ),
+    _sc_cat_filter, _sc_risk_filter, _sc_cs_filter, _sc_sort,
+    sizing_mode="stretch_width",
+    styles={"padding": "4px 0 10px"},
+    align="center",
+)
 
-_sc_tier_filter.param.watch(_on_tier_filter, "value")
-
-# ── Build the static Compliance Scorecard tab column ─────────────────────────
 _compliance_tab = pn.Column(
     pn.pane.HTML(
         f'<div style="font-family:Georgia,serif;font-size:18px;font-weight:700;'
@@ -1675,32 +1817,8 @@ _compliance_tab = pn.Column(
     ),
     _sc_score_pane,
     pn.layout.Divider(),
-    pn.Row(
-        pn.pane.HTML(
-            f'<span style="font-size:12px;font-weight:600;color:{NAVY};'
-            f'font-family:-apple-system,sans-serif;">Filter by tier:</span>',
-            align="center",
-        ),
-        _sc_tier_filter,
-        sizing_mode="stretch_width",
-        align="center",
-        styles={"padding": "4px 0 10px"},
-    ),
-    _sc_table_pane,
-    pn.layout.Divider(),
-    pn.Row(
-        pn.Column(
-            section_header("📈 Maverick Spend Trend"),
-            _sc_maverick_pane,
-            sizing_mode="stretch_width",
-        ),
-        pn.Column(
-            section_header("📅 Contract Expiry Timeline"),
-            _sc_expiry_pane,
-            sizing_mode="stretch_width",
-        ),
-        sizing_mode="stretch_width",
-    ),
+    _sc_filter_row,
+    _sc_cards_pane,
     sizing_mode="stretch_width",
 )
 
@@ -2473,7 +2591,7 @@ tabs.param.watch(_on_tab_change, 'active')
 template = pn.template.FastListTemplate(
     title="SpendLens",
     sidebar=[sidebar_col],
-    main=[tabs, _fab_ui_html, _fab_result_store, _fab_query_bridge],
+    main=[tabs, _fab_ui_html, _fab_result_store, _fab_query_bridge, _sc_edit_bridge],
     accent_base_color=NAVY,
     header_background=NAVY,
     background_color=BG,
