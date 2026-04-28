@@ -126,7 +126,7 @@ modules/
 | Dashboard | Panel (HoloViz) |
 | Charts | Plotly |
 | Data processing | Pandas |
-| AI classification & intelligence | Claude API (Anthropic) |
+| AI classification & intelligence | Claude API (Anthropic) · Grok API (xAI) |
 | Persistent storage | SQLite |
 | News scraping | feedparser |
 | Validation | Pydantic |
@@ -136,24 +136,22 @@ modules/
 
 ---
 
-<<<<<<< HEAD
 ## Recent Updates
 
 **April 2026**
-- **Icarus 5x speed improvement** — RSS feeds now fetched in parallel (9 simultaneous connections); article analysis split into concurrent batches using Claude Haiku; full scan ~8s vs. 45s before
-- **Icarus signals load on startup** — dashboard now shows cached signals immediately when the page opens, without needing to click Scan
-- Risk & Bottlenecks chart redesigned — log-scale axis, enlarged bubbles, total spend badge; Cloud & Compute no longer dominates the visual
-- Deep Dive treemap now shows top suppliers inside each category tile; click a supplier to open a procurement intel card (contract type, payment terms, price trend, discount, suggested action)
-- Market signals panel wired into supplier cards — pulls live Icarus signals for the selected supplier; one-click RSS refresh filtered to that vendor (~5s, no API cost)
-- Spend comparison chart replaces the fixed CAGR bar — pick any start/end year, see per-category growth as a stacked navy/blue bar sorted by size
-- Capex/Opex rebuilt as a multi-year stacked bar showing all five years side by side
+- **Grok (xAI) live search integrated** — Icarus now queries Grok-3-mini alongside RSS feeds; 3 topic-cluster calls per scan surface real-time X posts and breaking news before it reaches RSS; ~$0.002/scan extra cost
+- **ICARUS AI data interpretation strips** — each Deep Dive chart now shows 3 procurement-focused insight bullets derived from live spend data: maverick spend / PO coverage risk, budget overrun alerts, single-source exposure, contract coverage gaps, Capex/Opex ratio vs industry benchmark
+- **Period-aware spend analysis** — changing the From/To year selector instantly recalculates all insight bullets from local data (no API call); shows fastest growers, largest absolute mover, and PO compliance for the exact selected period
+- **Icarus 5x speed improvement** — RSS feeds fetched in parallel (9 simultaneous connections); article analysis split into concurrent Haiku batches; full scan ~8s vs. 45s before
+- **Icarus signals load on startup** — dashboard shows cached signals immediately on page open without requiring a scan
+- Risk & Bottlenecks chart redesigned — log-scale axis, enlarged bubbles, total spend badge
+- Deep Dive treemap with supplier drill-down — click any category tile to expand top suppliers; click a supplier to open a procurement intel card
+- Spend comparison chart — pick any start/end year, see per-category growth as stacked bars sorted by size
+- Capex/Opex rebuilt as multi-year stacked bar across all five years
 
 ---
 
-## Status
-=======
 ## Running SpendLens
->>>>>>> 545fa1b6eaf9b3877b700922818d7d41a41252f2
 
 ```bash
 # 1. Clone and activate virtual environment
@@ -174,16 +172,6 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 ```
 
 > **Note for Windows users:** The `PYTHONUTF8=1` prefix is required to handle non-ASCII vendor names and German umlauts in spend data. Without it, parsing may fail silently on certain datasets.
-
----
-
-## Recent Updates — 2026-04-26
-
-- **Risk Map redesigned** — log-scale x-axis prevents Cloud & Compute from dominating the chart; enlarged bubbles with full category labels; total spend badge pinned to top-left corner
-- **Treemap supplier drill-down** — two-level treemap (category → top 5 suppliers by spend); click a supplier to open a procurement intel card in-place with contract details, payment terms, price trend, discount status, and suggested action
-- **Market signals panel in Deep Dive** — supplier cards pull live Icarus signals from `icarus_memory.db`; "Fetch latest signals" button runs a fast RSS-only refresh (~5s, no Claude API call) filtered to the selected supplier
-- **Interactive spend comparison chart** — replaced the fixed CAGR bar; pick any start/end year to compare per-category growth; navy = base year spend, light blue = growth to end year; sorted by largest growth
-- **Capex/Opex redesigned as multi-year stacked bar** — shows all five years (2022–2026) side by side; Capex (navy) + Opex (green) stacked; built directly from category data, no year filter dependency
 
 ---
 
@@ -208,11 +196,11 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | Icarus — Weekly intelligence brief | ✅ Live |
 | Icarus — Document upload (in-memory) | ✅ Live |
 | Icarus — Signal deduplication | ✅ Live |
-<<<<<<< HEAD
 | Icarus — Parallel fetch & batch analysis (5x faster) | ✅ Live |
 | Icarus — Signals load on dashboard startup | ✅ Live |
-=======
->>>>>>> 545fa1b6eaf9b3877b700922818d7d41a41252f2
+| Icarus — Grok live search (real-time X + web signals) | ✅ Live |
+| Icarus — ICARUS AI data interpretation per chart | ✅ Live |
+| Icarus — Period-aware spend insight bullets | ✅ Live |
 | Icarus — Feedback learning loop | 🔨 In progress |
 | Compliance Scorecard tab | 📋 Planned |
 | Spend Variance Analysis | 📋 Planned |
