@@ -60,6 +60,9 @@ desktop.ini
 ehthumbs.db
 $RECYCLE.BIN/
 
+# ── Test datasets — local only, never commit ──────────────────────────────────
+test-datasets/
+
 # ── Session handover files ────────────────────────────────────────────────────
 handover/
 readmeGit.md
