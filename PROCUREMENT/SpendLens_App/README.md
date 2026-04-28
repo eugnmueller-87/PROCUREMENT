@@ -13,6 +13,8 @@ It combines a five-stage AI pipeline for data processing, a Panel-based analytic
 
 Built by someone who has worked in enterprise procurement. The features come from knowing what a category manager needs at 11pm before a supplier negotiation, not from a product spec.
 
+<img src="docs/screenshots/dashboard-overview.png" width="800" alt="SpendLens dashboard — KPI cards, spend evolution, budget vs actuals">
+
 ---
 
 ## The Problem It Solves
@@ -72,6 +74,8 @@ Every stage is designed to handle the reality of enterprise data — missing fie
 | Freelancer | Spend under personal names across HR sub-commodity |
 | Spend Pattern | Recurring / Blanket PO / One-off / Irregular |
 
+<img src="docs/screenshots/procurement-health.png" width="800" alt="Procurement health gauges — PO coverage, contract coverage, maverick spend, expiring contracts">
+
 ### Persistent Knowledge Base
 
 SpendLens never overwrites previous data. Every upload appends to a transaction timeline. Vendor classifications, spend patterns, and compliance flags accumulate over time.
@@ -94,6 +98,8 @@ Icarus is the live intelligence layer embedded in SpendLens. It answers the ques
 | Feedback Learning | Thumbs up / down on any signal feeds into per-category weights so Icarus learns your priorities over time. |
 
 When AWS raises your bill 18%, SpendLens doesn't just show you the number. It shows you that GPU spot prices rose 6%, US data center energy costs rose 4%, and the remaining 8% gap has no market justification. That's a negotiation, not an invoice to approve.
+
+<img src="docs/screenshots/icarus-signals.png" width="800" alt="Icarus market intelligence — live signal feed by procurement category">
 
 ---
 
@@ -148,6 +154,8 @@ modules/
 - Deep Dive treemap with supplier drill-down — click any category tile to expand top suppliers; click a supplier to open a procurement intel card
 - Spend comparison chart — pick any start/end year, see per-category growth as stacked bars sorted by size
 - Capex/Opex rebuilt as multi-year stacked bar across all five years
+
+<img src="docs/screenshots/deep-dive-icarus.png" width="800" alt="Deep Dive — spend comparison chart with ICARUS AI procurement insight strips">
 
 ---
 
