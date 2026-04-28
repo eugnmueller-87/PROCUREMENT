@@ -1,0 +1,14 @@
+<svg width="44" height="44" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="100,4 182,52 182,148 100,196 18,148 18,52"
+           fill="none" stroke="#1B3A6B" stroke-width="8"/>
+  <line x1="100" y1="4"   x2="100" y2="100" stroke="#1B3A6B" stroke-width="3" opacity="0.4"/>
+  <line x1="182" y1="52"  x2="100" y2="100" stroke="#1B3A6B" stroke-width="3" opacity="0.4"/>
+  <line x1="182" y1="148" x2="100" y2="100" stroke="#1B3A6B" stroke-width="3" opacity="0.4"/>
+  <line x1="100" y1="196" x2="100" y2="100" stroke="#1B3A6B" stroke-width="3" opacity="0.4"/>
+  <line x1="18"  y1="148" x2="100" y2="100" stroke="#1B3A6B" stroke-width="3" opacity="0.4"/>
+  <line x1="18"  y1="52"  x2="100" y2="100" stroke="#1B3A6B" stroke-width="3" opacity="0.4"/>
+  <path d="M55,100 Q100,60 145,100 Q100,140 55,100 Z"
+        fill="none" stroke="#1A7A4A" stroke-width="6"/>
+  <circle cx="100" cy="97" r="18" fill="none" stroke="#1A7A4A" stroke-width="5"/>
+  <circle cx="100" cy="94" r="8" fill="#1A7A4A"/>
+</svg>
