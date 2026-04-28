@@ -2,10 +2,10 @@
 SpendLens — AI-Powered Procurement Intelligence Dashboard
 =========================================================
 Run with:
-    panel serve app.py --show --autoreload
+    PYTHONUTF8=1 panel serve app.py --show --autoreload
 
-Or for development:
-    python app.py
+Dashboard URL:
+    http://localhost:5006/app
 """
 
 import panel as pn
@@ -387,6 +387,395 @@ def section_header(title: str) -> pn.pane.HTML:
                font-size:18px; border-bottom:2px solid {NAVY}; padding-bottom:8px;">
         {title}
     </h3>""", sizing_mode="stretch_width")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ICARUS AI — GRAPH INSIGHTS
+# ─────────────────────────────────────────────────────────────────────────────
+_BEST_PRACTICES = {
+    "spend_delta": [
+        {
+            "text": "Maverick spend benchmark: world-class procurement organisations keep non-PO spend below 5% of total. Above 15%, a PO-mandate programme with finance sign-off gates is needed. PO compliance is the fastest lever to reduce invoice disputes and audit findings.",
+            "source": "Hackett Group — Procurement Excellence Benchmark 2024",
+            "url": "https://www.thehackettgroup.com/research/",
+        },
+        {
+            "text": "Set sourcing event triggers at 20% YoY category growth — not after the budget overrun happens. Each percentage point of category savings outperforms volume reduction because it drops directly to EBITDA.",
+            "source": "McKinsey — The CPO's Guide to Procurement Excellence",
+            "url": "https://www.mckinsey.com/capabilities/operations/our-insights/the-cpos-guide-to-procurement-excellence",
+        },
+    ],
+    "capex_opex": [
+        {
+            "text": "Cloud Reserved Instances and Savings Plans yield 30–60% vs on-demand pricing but behave like Capex commitments. Always model 1-year vs 3-year payback before committing — usage patterns change faster than RI terms.",
+            "source": "FinOps Foundation — Cloud Rate Optimisation",
+            "url": "https://www.finops.org/framework/capabilities/rate-optimization/",
+        },
+        {
+            "text": "World-class IT organisations keep total Opex (SaaS + cloud subscriptions) below 12–15% of revenue. A SaaS rationalisation programme focused on licence utilisation and duplicate tooling typically returns 20–35% within 12 months.",
+            "source": "Gartner — IT Key Metrics & IT Cost Benchmarks",
+            "url": "https://www.gartner.com/en/information-technology/insights/it-metrics",
+        },
+    ],
+    "treemap": [
+        {
+            "text": "No single supplier should represent >40% of category spend without a contracted price-lock and a qualified alternate. Single-source relationships without SLA financial penalties transfer all supply risk to the buyer with zero leverage.",
+            "source": "ISM — Supply Chain Risk Management Framework",
+            "url": "https://www.ismworld.org/supply-management-news-and-reports/reports/risk/",
+        },
+        {
+            "text": "100% of spend above your materiality threshold should be under a signed contract. Contract coverage below 80% means invoices are approved against nothing — no price certainty, no SLA, no audit trail. Formalise spend before the next renewal cycle.",
+            "source": "Ardent Partners — State of Procurement & Contract Management",
+            "url": "https://ardentpartners.com/research/",
+        },
+    ],
+}
+
+# Categories displayed per chart (None = all 11 taxonomy categories)
+_GRAPH_CATEGORIES = {
+    "spend_delta": None,
+    "capex_opex":  ["Cloud & Compute", "Hardware & Equipment", "Real Estate", "Facilities & Office"],
+    "treemap":     None,
+}
+
+_GRAPH_KEYWORD_MAP = {
+    "spend_delta": ["spend", "growth", "cost", "increase", "budget"],
+    "capex_opex":  ["capex", "opex", "cloud", "hardware", "investment", "compute", "lease"],
+    "treemap":     ["supplier", "concentration", "risk", "category", "single source"],
+}
+
+_IMPACT_PREFIX = {"negative": "↓", "positive": "↑", "neutral": "→"}
+_IMPACT_C      = {"negative": RED, "positive": GREEN, "neutral": DIM}
+
+# Category colour dots aligned to taxonomy
+_CAT_DOT = {
+    "Cloud & Compute":       "#378ADD",
+    "AI/ML APIs & Data":     "#D4537E",
+    "IT Software & SaaS":    "#534AB7",
+    "Telecom & Voice":       "#1D9E75",
+    "Recruitment & HR":      "#639922",
+    "Professional Services": "#0F6E56",
+    "Marketing & Campaigns": "#7F77DD",
+    "Facilities & Office":   "#993C1D",
+    "Real Estate":           "#8B6914",
+    "Hardware & Equipment":  "#BA7517",
+    "Travel & Expenses":     "#185FA5",
+}
+
+# Icarus AI eye SVG (for icon param on Panel buttons)
+_ICARUS_AI_SVG = (
+    '<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    '<polygon points="50,4 93,27 93,73 50,96 7,73 7,27" fill="rgba(255,255,255,0.15)" stroke="white" stroke-width="5"/>'
+    '<path d="M28,50 Q50,28 72,50 Q50,72 28,50 Z" fill="none" stroke="#1D9E75" stroke-width="5"/>'
+    '<circle cx="50" cy="50" r="10" fill="#1D9E75"/>'
+    '</svg>'
+)
+# Inline eye used inside HTML panes
+_EYE_HTML = (
+    '<svg width="13" height="13" viewBox="0 0 100 100" fill="none" style="flex-shrink:0;vertical-align:middle">'
+    '<polygon points="50,4 93,27 93,73 50,96 7,73 7,27" fill="#EDF0F7" stroke="#1B2A5E" stroke-width="5"/>'
+    '<path d="M28,50 Q50,28 72,50 Q50,72 28,50 Z" fill="none" stroke="#1D9E75" stroke-width="4"/>'
+    '<circle cx="50" cy="50" r="9" fill="#1D9E75"/></svg>'
+)
+
+
+def _signals_stale() -> bool:
+    from datetime import timezone as _tz
+    db = "clients/default/icarus_memory.db"
+    if not os.path.exists(db):
+        return True
+    try:
+        conn = sqlite3.connect(db)
+        c    = conn.cursor()
+        c.execute("SELECT timestamp FROM signals ORDER BY timestamp DESC LIMIT 1")
+        row  = c.fetchone()
+        conn.close()
+        if not row:
+            return True
+        dt = datetime.fromisoformat(row[0].replace("Z", "+00:00"))
+        return (datetime.now(_tz.utc) - dt).days > 30
+    except Exception:
+        return True
+
+
+def _build_data_bullets(graph_id: str, start_yr: int | None = None, end_yr: int | None = None) -> str:
+    """Procurement insight bullets — period-specific for spend_delta, df_meta-driven for others."""
+    try:
+        dm = df_meta
+    except NameError:
+        dm = None
+
+    def _row(icon, color, label, text):
+        return (
+            f'<div style="display:flex;gap:9px;align-items:flex-start;'
+            f'padding:6px 0;border-bottom:1px solid #f4f6f8;">'
+            f'<span style="color:{color};font-weight:700;font-size:14px;flex-shrink:0;margin-top:1px;">{icon}</span>'
+            f'<div style="font-size:12px;font-family:-apple-system,sans-serif;flex:1;line-height:1.6;">'
+            f'<span style="font-weight:700;color:#1B3A6B;">{label}:&nbsp;</span>'
+            f'<span style="color:#333;">{text}</span>'
+            f'</div></div>'
+        )
+
+    out = ""
+
+    if graph_id == "spend_delta":
+        # ── Period-specific analysis from CATEGORIES_RAW (zero API calls) ────────
+        si = YEARS.index(start_yr) if start_yr in YEARS else 0
+        ei = YEARS.index(end_yr)   if end_yr   in YEARS else len(YEARS) - 1
+        if ei < si:
+            si, ei = ei, si
+            start_yr, end_yr = end_yr, start_yr
+        n_yrs = ei - si  # number of years in the period
+
+        # Build period deltas for all categories
+        deltas = []
+        for c in CATEGORIES_RAW:
+            s0 = c["spend"][si]
+            s1 = c["spend"][ei]
+            delta = s1 - s0
+            pct   = (s1 / s0 - 1) * 100 if s0 else 0.0
+            cagr  = ((s1 / s0) ** (1 / n_yrs) - 1) * 100 if s0 and n_yrs > 0 else pct
+            deltas.append({
+                "name": c["name"], "s0": s0, "s1": s1, "delta": delta,
+                "pct": pct, "cagr": cagr,
+                "po": c["po_coverage_pct"], "cc": c["contract_coverage_pct"],
+                "risk": c["risk"], "single_source": c["single_source"],
+                "budget": c["budget"],
+            })
+
+        yrs_label = f"{start_yr}→{end_yr}" if start_yr != end_yr else str(start_yr)
+
+        # 1 — Fastest growing categories in the selected period
+        top3 = sorted(deltas, key=lambda x: x["pct"], reverse=True)[:3]
+        lines = " · ".join(
+            f"{d['name']} {d['pct']:+.0f}%" + (f" ({d['cagr']:+.0f}% pa)" if n_yrs > 1 else "")
+            for d in top3
+        )
+        worst_pct = top3[0]["pct"] if top3 else 0
+        color = RED if worst_pct > 50 else YELLOW if worst_pct > 25 else GREEN
+        note = ("Growth above 25% outpaces typical savings — trigger sourcing events now before leverage is lost."
+                if worst_pct > 25 else "Growth within manageable thresholds for the period.")
+        out += _row("↑", color, f"Fastest growth {yrs_label}", f"{lines}. {note}")
+
+        # 2 — Largest absolute spend increase & procurement action
+        top_abs = max(deltas, key=lambda x: x["delta"])
+        if top_abs["delta"] > 0:
+            color = RED if top_abs["delta"] > 5000 else YELLOW if top_abs["delta"] > 2000 else GREEN
+            action = ("Volume growth gives negotiating leverage — run competitive RFP before renewing."
+                      if top_abs["pct"] > 30 else "Monitor trajectory; renew contract before next cycle.")
+            out += _row("↑", color, "Largest spend increase",
+                f"{top_abs['name']} +€{top_abs['delta']:,.0f}K ({top_abs['pct']:+.0f}% over "
+                f"{n_yrs} yr{'s' if n_yrs > 1 else ''}). {action}")
+        else:
+            top_dec = min(deltas, key=lambda x: x["delta"])
+            out += _row("↓", GREEN, "Spend reduction",
+                f"{top_dec['name']} {top_dec['delta']:+,.0f}K ({top_dec['pct']:+.0f}%) — "
+                "confirm cost avoidance is captured in savings tracker.")
+
+        # 3 — PO compliance across all categories (maverick spend signal)
+        low_po = [d for d in deltas if d["po"] < 70]
+        if low_po:
+            worst = min(low_po, key=lambda x: x["po"])
+            out += _row("↓", RED, "Maverick spend risk",
+                f"{worst['name']} PO coverage {worst['po']:.0f}% (target 80%+) — "
+                f"{len(low_po)} categories below threshold. Mandate PO-first policy and block non-PO invoices.")
+        else:
+            avg_po = sum(d["po"] for d in deltas) / len(deltas) if deltas else 0
+            out += _row("✓", GREEN, "PO compliance",
+                f"Average PO coverage {avg_po:.0f}% — above 80% threshold across all categories. "
+                "Continue enforcing PO-first policy.")
+
+    elif graph_id == "capex_opex":
+        if dm is None or dm.empty:
+            return '<div style="color:#888;font-size:12px;padding:6px 0;font-family:-apple-system,sans-serif;">Upload spend data to see chart interpretation.</div>'
+        if "capex_opex" in dm.columns and "spend_2026e" in dm.columns:
+            capex = dm[dm["capex_opex"] == "Capex"]["spend_2026e"].sum()
+            opex  = dm[dm["capex_opex"] == "Opex"]["spend_2026e"].sum()
+            total = capex + opex
+            if total > 0:
+                opex_pct  = opex  / total * 100
+                capex_pct = capex / total * 100
+
+                # 1 — Opex/Capex ratio with industry benchmark
+                color = YELLOW if opex_pct > 75 else GREEN
+                note  = ("High Opex share — world-class IT Opex benchmark is <15% of revenue; "
+                         "SaaS rationalisation typically delivers 20–35% reduction."
+                         if opex_pct > 75 else
+                         "Balanced investment/running-cost split. Review for hidden auto-renewal commitments.")
+                out += _row("→", color, "Opex/Capex split",
+                    f"Opex {opex_pct:.0f}% · Capex {capex_pct:.0f}% of managed spend. {note}")
+
+                # 2 — Largest Capex exposure
+                capex_cats = dm[dm["capex_opex"] == "Capex"].nlargest(1, "spend_2026e")
+                if not capex_cats.empty:
+                    top = capex_cats.iloc[0]
+                    out += _row("↑", NAVY, "Largest Capex exposure",
+                        f"{top['category']} €{top['spend_2026e']:,.0f}K. Evaluate Reserved Instances "
+                        "or 3-year framework agreement to lock pricing before next renewal cycle.")
+
+                # 3 — Fastest growing Opex (SaaS sprawl signal)
+                if "cagr" in dm.columns:
+                    opex_cats = dm[dm["capex_opex"] == "Opex"].nlargest(1, "cagr")
+                    if not opex_cats.empty:
+                        top   = opex_cats.iloc[0]
+                        cagr  = top.get("cagr", 0)
+                        color = RED if cagr > 30 else YELLOW if cagr > 15 else GREEN
+                        out += _row("↑", color, "Fastest Opex growth",
+                            f"{top['category']} {cagr:+.0f}% CAGR. Audit SLA terms, usage-based "
+                            "pricing caps, and auto-renewal clauses before contract anniversary.")
+        else:
+            out += _row("→", DIM, "Classification", "Upload spend data with Capex/Opex classification to enable this analysis.")
+
+    elif graph_id == "treemap":
+        if dm is None or dm.empty:
+            return '<div style="color:#888;font-size:12px;padding:6px 0;font-family:-apple-system,sans-serif;">Upload spend data to see chart interpretation.</div>'
+        # 1 — Single source risk (highest priority procurement risk)
+        if "single_source" in dm.columns and "spend_2026e" in dm.columns:
+            ss = dm[dm["single_source"] == True].sort_values("spend_2026e", ascending=False)
+            if not ss.empty:
+                top = ss.iloc[0]
+                out += _row("⚠", RED, "Single-source risk",
+                    f"{len(ss)} categories single-sourced — {top['category']} "
+                    f"€{top['spend_2026e']:,.0f}K highest exposure. "
+                    "Issue RFI to qualify ≥1 alternative supplier and negotiate dual-source SLA.")
+
+        # 2 — Contract coverage gap
+        if "contract_coverage_pct" in dm.columns:
+            low_cc = dm[dm["contract_coverage_pct"] < 80].sort_values("contract_coverage_pct")
+            if not low_cc.empty:
+                worst = low_cc.iloc[0]
+                out += _row("↓", YELLOW, "Contract coverage gap",
+                    f"{worst['category']} only {worst['contract_coverage_pct']:.0f}% of spend under contract "
+                    f"({len(low_cc)} categories below 80% target). "
+                    "Initiate contract formalisation — uncovered spend is maverick by definition.")
+            else:
+                avg_cc = dm["contract_coverage_pct"].mean()
+                out += _row("✓", GREEN, "Contract coverage",
+                    f"Average {avg_cc:.0f}% of spend under contract. Maintain renewal pipeline.")
+
+        # 3 — Critical/High risk categories by spend
+        if "risk" in dm.columns and "spend_2026e" in dm.columns:
+            crit = dm[dm["risk"].isin(["Critical", "High"])].sort_values("spend_2026e", ascending=False)
+            if not crit.empty:
+                top   = crit.iloc[0]
+                color = RED if top["risk"] == "Critical" else YELLOW
+                out += _row("↓", color, "Risk-weighted spend",
+                    f"{len(crit)} categories at Critical/High risk. Priority: "
+                    f"{top['category']} €{top['spend_2026e']:,.0f}K — source second supplier, "
+                    "negotiate financial SLA penalties, and set quarterly supplier scorecards.")
+
+    return out or '<div style="color:#888;font-size:12px;padding:4px 0;">No data available.</div>'
+
+
+def _build_signal_rows(cats: list) -> str:
+    """Top 3 Icarus market signals for the relevant categories."""
+    db = "clients/default/icarus_memory.db"
+    _empty = (
+        '<div style="color:#888;font-size:11.5px;font-family:-apple-system,sans-serif;padding:4px 0;">'
+        'No market signals yet — click the ICARUS AI button or run a scan from the ICARUS tab.</div>'
+    )
+    if not os.path.exists(db):
+        return _empty
+    try:
+        conn = sqlite3.connect(db)
+        c    = conn.cursor()
+        if cats:
+            ph = ",".join("?" * len(cats))
+            c.execute(
+                f"SELECT headline, action, impact, category FROM signals "
+                f"WHERE category IN ({ph}) ORDER BY relevance DESC, timestamp DESC LIMIT 3",
+                cats,
+            )
+        else:
+            c.execute(
+                "SELECT headline, action, impact, category FROM signals "
+                "ORDER BY relevance DESC, timestamp DESC LIMIT 3"
+            )
+        rows = c.fetchall()
+        conn.close()
+    except Exception:
+        return _empty
+
+    if not rows:
+        return _empty
+
+    out = ""
+    for headline, action, impact, cat in rows:
+        dot  = _CAT_DOT.get(cat, "#888")
+        imp  = impact or "neutral"
+        pre  = _IMPACT_PREFIX.get(imp, "→")
+        ic   = _IMPACT_C.get(imp, DIM)
+        head = (headline or "")[:90]
+        act  = action or ""
+        out += (
+            f'<div style="display:flex;gap:8px;align-items:flex-start;'
+            f'padding:4px 0;border-bottom:1px solid #f4f6f8;">'
+            f'<span style="width:8px;height:8px;border-radius:50%;background:{dot};'
+            f'flex-shrink:0;margin-top:5px;"></span>'
+            f'<div style="font-size:11.5px;font-family:-apple-system,sans-serif;flex:1;line-height:1.5;">'
+            f'<span style="font-weight:600;color:{dot};">{cat}</span> '
+            f'<span style="color:{ic};font-weight:600;">{pre}</span> '
+            f'<span style="color:#333;">{head}</span>'
+            + (f'<div style="font-size:10.5px;color:#0F6E56;margin-top:1px;">→ {act}</div>' if act else "")
+            + '</div></div>'
+        )
+    return out
+
+
+def _build_insight_html(graph_id: str, start_yr: int | None = None, end_yr: int | None = None) -> str:
+    """Data interpretation + market signals + best practices for one Deep Dive chart."""
+    _TITLES = {
+        "spend_delta": "Spend Growth & Budget Analysis",
+        "capex_opex":  "Capex vs Opex Interpretation",
+        "treemap":     "Concentration & Risk Analysis",
+    }
+    title = _TITLES.get(graph_id, "Chart Analysis")
+    cats  = _GRAPH_CATEGORIES.get(graph_id) or [c["name"] for c in CATEGORIES_RAW]
+    stale = _signals_stale()
+    stale_b = (
+        '<span style="font-size:10px;color:#B8860B;background:#FFF8E0;padding:2px 7px;'
+        'border-radius:99px;margin-left:8px;">market signals may be outdated — click 🔵 to refresh</span>'
+        if stale else ""
+    )
+
+    data_html   = _build_data_bullets(graph_id, start_yr, end_yr)
+    signal_html = _build_signal_rows(cats)
+    bp_html     = ""
+    for bp in _BEST_PRACTICES.get(graph_id, []):
+        bp_html += (
+            f'<div style="display:flex;gap:9px;align-items:flex-start;padding:5px 0;">'
+            f'<span style="font-size:13px;flex-shrink:0;">📌</span>'
+            f'<div style="font-size:12px;color:#444;line-height:1.55;font-family:-apple-system,sans-serif;">'
+            f'{bp["text"]}'
+            f'<a href="{bp["url"]}" target="_blank" rel="noopener noreferrer" '
+            f'style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;font-size:10px;'
+            f'color:#2E5BA8;text-decoration:none;background:#EFF3FB;padding:1px 7px;'
+            f'border-radius:99px;white-space:nowrap;">↗ {bp["source"]}</a>'
+            f'</div></div>'
+        )
+
+    return (
+        f'<div style="background:#F8FAFE;border:1px solid #E2E8F0;border-radius:8px;'
+        f'padding:12px 16px;margin-top:4px;">'
+        f'<div style="display:flex;align-items:center;margin-bottom:8px;gap:6px;">'
+        f'{_EYE_HTML}'
+        f'<span style="font-size:11px;font-weight:700;color:#1B3A6B;text-transform:uppercase;'
+        f'letter-spacing:0.8px;font-family:-apple-system,sans-serif;">ICARUS AI — {title}</span>'
+        f'</div>'
+        f'{data_html}'
+        f'<div style="border-top:1px solid #E2E8F0;margin:10px 0 8px;"></div>'
+        f'<div style="display:flex;align-items:center;margin-bottom:6px;gap:5px;">'
+        f'<span style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;'
+        f'letter-spacing:0.7px;font-family:-apple-system,sans-serif;">Market Intelligence</span>'
+        f'{stale_b}</div>'
+        f'{signal_html}'
+        f'<div style="border-top:1px solid #E2E8F0;margin:10px 0 8px;"></div>'
+        f'<div style="display:flex;align-items:center;margin-bottom:6px;gap:6px;">'
+        f'<span style="font-size:13px;">📚</span>'
+        f'<span style="font-size:11px;font-weight:700;color:#1B3A6B;text-transform:uppercase;'
+        f'letter-spacing:0.8px;font-family:-apple-system,sans-serif;">Best Practice</span>'
+        f'</div>{bp_html}</div>'
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -933,8 +1322,9 @@ chart_deep      = pn.Column(sizing_mode="stretch_width")
 drill_panel     = pn.Column(sizing_mode="stretch_width")
 cagr_start      = pn.widgets.Select(name="From", options=YEARS, value=2022, width=100)
 cagr_end        = pn.widgets.Select(name="To",   options=YEARS, value=2026, width=100)
-cagr_pane       = pn.pane.Plotly(sizing_mode="stretch_width")
-treemap_pane      = pn.pane.Plotly(sizing_mode="stretch_width")
+_NO_MODEBAR = {"displayModeBar": False}
+cagr_pane       = pn.pane.Plotly(sizing_mode="stretch_width", config=_NO_MODEBAR)
+treemap_pane      = pn.pane.Plotly(sizing_mode="stretch_width", config=_NO_MODEBAR)
 supplier_detail   = pn.pane.HTML("", sizing_mode="stretch_width")
 supplier_news     = pn.pane.HTML("", sizing_mode="stretch_width")
 fetch_signals_btn = pn.widgets.Button(name="🔍 Fetch latest signals", button_type="primary",
@@ -943,6 +1333,165 @@ treemap_back      = pn.widgets.Button(name="← Back to category view", button_t
                                       width=200, margin=(0, 0, 8, 0))
 treemap_frame     = pn.Column(sizing_mode="stretch_width")
 _current_supplier = [""]  # mutable box for the fetch button callback
+
+# ── Persistent insight strips (Deep Dive) ────────────────────────────────────
+insight_spend_delta = pn.pane.HTML("", sizing_mode="stretch_width")
+insight_capex_opex  = pn.pane.HTML("", sizing_mode="stretch_width")
+insight_treemap     = pn.pane.HTML("", sizing_mode="stretch_width")
+
+# ── Round animated ICARUS AI buttons ─────────────────────────────────────────
+import icarus as _icarus_mod
+
+_BTN_STYLE = ["""
+    :host{display:inline-flex;align-items:center;}
+    .bk-btn{
+        width:34px!important;height:34px!important;border-radius:50%!important;
+        padding:0!important;background:#1B3A6B!important;border-color:#1B3A6B!important;
+        display:flex!important;align-items:center!important;justify-content:center!important;
+        box-shadow:0 2px 10px rgba(27,58,107,0.35)!important;
+    }
+    .bk-btn:hover{background:#2E5BA8!important;border-color:#2E5BA8!important;
+                  box-shadow:0 4px 14px rgba(27,58,107,0.45)!important;}
+"""]
+
+
+def _make_icarus_ai_btn(graph_id: str, insight_pane: pn.pane.HTML) -> pn.widgets.Button:
+    """Round ICARUS AI button — spins (via Panel loading state) while refreshing."""
+    btn = pn.widgets.Button(
+        name="", icon=_ICARUS_AI_SVG, icon_size="18px",
+        width=34, height=34, margin=(0, 0, 0, 0),
+        stylesheets=_BTN_STYLE,
+    )
+
+    def _on_click(_):
+        btn.loading = True
+        def _do():
+            try:
+                cats   = list(df_meta["category"].dropna().unique()) if "category" in df_meta.columns else []
+                kws    = ", ".join(_GRAPH_KEYWORD_MAP.get(graph_id, [])[:3])
+                result = _icarus_mod.query_with_claude(
+                    query=f"Latest procurement signals for {graph_id.replace('_', ' ')}: {kws}",
+                    client_categories=cats, client_name="Client",
+                )
+                if result.get("signals"):
+                    _icarus_mod.init_db()
+                    qid = _icarus_mod.save_query(cats, 0, len(result["signals"]))
+                    _icarus_mod.save_signals(qid, result["signals"])
+            except Exception as e:
+                print(f"[ICARUS AI] refresh error ({graph_id}): {e}")
+            finally:
+                insight_pane.object = _build_insight_html(graph_id)
+                btn.loading = False
+        threading.Thread(target=_do, daemon=True).start()
+
+    btn.on_click(_on_click)
+    return btn
+
+
+icarus_btn_delta   = _make_icarus_ai_btn("spend_delta", insight_spend_delta)
+icarus_btn_capex   = _make_icarus_ai_btn("capex_opex",  insight_capex_opex)
+icarus_btn_treemap = _make_icarus_ai_btn("treemap",     insight_treemap)
+
+
+def refresh_all_insights():
+    """Populate all Deep Dive insight strips — spend_delta uses selected period."""
+    insight_spend_delta.object = _build_insight_html("spend_delta", cagr_start.value, cagr_end.value)
+    insight_capex_opex.object  = _build_insight_html("capex_opex")
+    insight_treemap.object     = _build_insight_html("treemap")
+
+
+# ── Floating ICARUS AI FAB (bottom-right, click feather to open) ─────────────
+_fab_input = pn.widgets.TextInput(
+    placeholder="Ask ICARUS AI about your spend…",
+    sizing_mode="stretch_width",
+    stylesheets=["""
+        :host{flex:1;}
+        label{display:none!important;}
+        .bk-input{height:34px;border:1.5px solid #D0DAF0;border-radius:8px;
+                  padding:0 10px;font-size:13px;background:#fafafa;
+                  font-family:-apple-system,sans-serif;}
+        .bk-input:focus{border-color:#1B3A6B;background:white;outline:none;}
+    """],
+)
+_fab_result = pn.pane.HTML("", sizing_mode="stretch_width", visible=False)
+_fab_send   = pn.widgets.Button(
+    name="→", button_type="primary", width=36,
+    stylesheets=["""
+        .bk-btn{width:36px!important;height:34px!important;padding:0;border-radius:8px;
+                font-size:16px;font-weight:700;background:#1B3A6B;border-color:#1B3A6B;color:white;}
+        .bk-btn:hover{background:#2E5BA8;}
+    """],
+)
+_fab_chat = pn.Column(
+    pn.pane.HTML(
+        f'{_EYE_HTML}&nbsp;'
+        f'<span style="font-size:13px;font-weight:700;color:#1B3A6B;vertical-align:middle;'
+        f'font-family:-apple-system,sans-serif;">ICARUS AI</span>',
+        sizing_mode="stretch_width", margin=(0, 0, 8, 0),
+    ),
+    pn.Row(_fab_input, _fab_send, align="center", sizing_mode="stretch_width",
+           styles={"gap": "6px"}),
+    _fab_result,
+    visible=False,
+    styles={
+        "position": "fixed", "bottom": "84px", "right": "24px", "z-index": "9998",
+        "width": "340px", "background": "white", "border-radius": "14px", "padding": "16px",
+        "box-shadow": "0 8px 32px rgba(27,58,107,0.18)", "border": "1px solid #E2E8F0",
+    },
+)
+_fab_toggle = pn.widgets.Toggle(
+    name="", icon=_ICARUS_AI_SVG, icon_size="22px",
+    value=False, width=52, height=52,
+    stylesheets=["""
+        .bk-btn{
+            width:52px!important;height:52px!important;border-radius:50%!important;
+            padding:0!important;background:#1B3A6B!important;border-color:#1B3A6B!important;
+            box-shadow:0 4px 16px rgba(27,58,107,0.4)!important;
+        }
+        .bk-btn:hover,.bk-btn.bk-active{background:#2E5BA8!important;border-color:#2E5BA8!important;}
+    """],
+    styles={"position": "fixed", "bottom": "24px", "right": "24px", "z-index": "9999"},
+)
+
+
+def _on_fab_toggle(event):
+    _fab_chat.visible = event.new
+    _fab_toggle.icon  = (
+        '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        '<line x1="5" y1="5" x2="19" y2="19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>'
+        '<line x1="19" y1="5" x2="5" y2="19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>'
+        '</svg>'
+        if event.new else _ICARUS_AI_SVG
+    )
+
+_fab_toggle.param.watch(_on_fab_toggle, "value")
+
+
+def _fab_ask(_):
+    q = _fab_input.value.strip()
+    if not q:
+        return
+    _fab_send.loading   = True
+    _fab_result.object  = '<div style="color:#888;font-size:12px;padding:6px 0;">Thinking…</div>'
+    _fab_result.visible = True
+
+    def _do():
+        try:
+            cats = list(df_meta["category"].dropna().unique()) if "category" in df_meta.columns else []
+            res  = _icarus_mod.query_with_claude(q, cats, "Client")
+            ans  = res.get("answer", "No response received.")
+            _fab_result.object = (
+                f'<div style="font-size:13px;color:#1a1a2e;line-height:1.7;'
+                f'padding:8px 0;font-family:-apple-system,sans-serif;">{ans}</div>'
+            )
+        except Exception as ex:
+            _fab_result.object = f'<div style="color:{RED};font-size:12px;">Error: {ex}</div>'
+        finally:
+            _fab_send.loading = False
+
+    threading.Thread(target=_do, daemon=True).start()
+
+_fab_send.on_click(_fab_ask)
 
 data_preview = pn.widgets.Tabulator(
     df_meta[["category", "spend_2026e", "risk", "concentration", "contract_end"]],
@@ -1014,8 +1563,8 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_s1.extend([
         section_header("📊 Spend Overview"),
         pn.Row(
-            pn.pane.Plotly(chart_spend_stacked(ds_trend),              sizing_mode="stretch_width"),
-            pn.pane.Plotly(chart_category_bars(dm, year_label),        sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_spend_stacked(ds_trend),              sizing_mode="stretch_width", config=_NO_MODEBAR),
+            pn.pane.Plotly(chart_category_bars(dm, year_label),        sizing_mode="stretch_width", config=_NO_MODEBAR),
         ),
     ])
 
@@ -1023,7 +1572,7 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_s2.clear()
     chart_s2.extend([
         section_header("⚠ Risk & Bottlenecks"),
-        pn.pane.Plotly(chart_risk_bubble(dm), sizing_mode="stretch_width"),
+        pn.pane.Plotly(chart_risk_bubble(dm), sizing_mode="stretch_width", config=_NO_MODEBAR),
         drill_panel,
         section_header("📋 Expiring Contracts"),
         render_contracts_table(df_contracts),
@@ -1047,7 +1596,7 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
     chart_s4.extend([
         section_header("💶 EBITDA Impact"),
         pn.Row(
-            pn.pane.Plotly(chart_ebitda_waterfall(ebitda_yr),          sizing_mode="stretch_width"),
+            pn.pane.Plotly(chart_ebitda_waterfall(ebitda_yr),          sizing_mode="stretch_width", config=_NO_MODEBAR),
             pn.pane.Plotly(chart_category_bars(dm, year_label),        sizing_mode="stretch_width"),
         ),
         render_ebitda_table(ebitda_yr),
@@ -1066,15 +1615,49 @@ def update_dashboard(df_s=None, df_m=None, df_e=None, df_c=None, year_val=None):
                 width=130,
                 margin=(0, 12, 0, 0),
             ),
-            cagr_pane,
-            pn.pane.Plotly(chart_capex_opex(), sizing_mode="stretch_width"),
+            pn.Column(
+                pn.Row(
+                    pn.pane.HTML(f"<span style='font-size:13px;font-weight:600;color:{NAVY};font-family:Georgia,serif;'>Spend by category</span>",
+                                 margin=(0, 0, 0, 0)),
+                    pn.Spacer(sizing_mode="stretch_width"),
+                    icarus_btn_delta,
+                    align="center",
+                    sizing_mode="stretch_width",
+                ),
+                cagr_pane,
+                insight_spend_delta,
+                sizing_mode="stretch_width",
+            ),
+            pn.Column(
+                pn.Row(
+                    pn.pane.HTML(f"<span style='font-size:13px;font-weight:600;color:{NAVY};font-family:Georgia,serif;'>Capex vs Opex spend per year</span>",
+                                 margin=(0, 0, 0, 0)),
+                    pn.Spacer(sizing_mode="stretch_width"),
+                    icarus_btn_capex,
+                    align="center",
+                    sizing_mode="stretch_width",
+                ),
+                pn.pane.Plotly(chart_capex_opex(), sizing_mode="stretch_width", config=_NO_MODEBAR),
+                insight_capex_opex,
+                sizing_mode="stretch_width",
+            ),
+            sizing_mode="stretch_width",
+        ),
+        pn.Row(
+            pn.pane.HTML(f"<span style='font-size:13px;font-weight:600;color:{NAVY};font-family:Georgia,serif;'>Spend by Category × Risk</span>",
+                         margin=(8, 0, 0, 0)),
+            pn.Spacer(sizing_mode="stretch_width"),
+            icarus_btn_treemap,
+            align="center",
             sizing_mode="stretch_width",
         ),
         treemap_frame,
+        insight_treemap,
     ])
     cagr_pane.object   = build_spend_delta_chart(cagr_start.value, cagr_end.value)
     treemap_pane.object = chart_treemap(dm)
     treemap_frame.objects = [treemap_pane]
+    refresh_all_insights()
 
     # ── Data preview — rename column to show the actual year ──
     if "category" in dm.columns:
@@ -1121,6 +1704,7 @@ def update_from_uploaded(flagged_df: pd.DataFrame, filename: str):
                         "po_status", "maverick_flag", "shadow_it_flag",
                         "freelancer_flag", "spend_pattern"] if c in flagged_df.columns
         ]].head(200)
+        refresh_all_insights()
 
 
 # ── Year selector ──
@@ -1380,6 +1964,7 @@ def _on_fetch_signals(_):
 fetch_signals_btn.on_click(_on_fetch_signals)
 def _update_cagr(*_):
     cagr_pane.object = build_spend_delta_chart(cagr_start.value, cagr_end.value)
+    insight_spend_delta.object = _build_insight_html("spend_delta", cagr_start.value, cagr_end.value)
 
 cagr_start.param.watch(_update_cagr, "value")
 cagr_end.param.watch(_update_cagr, "value")
@@ -1507,6 +2092,7 @@ icarus_panel = IcarusPanel(
     client_name="Client"
 )
 pn.state.onload(icarus_panel.load_recent)
+pn.state.onload(refresh_all_insights)
 
 def handle_icarus(event):
     status_log.object = "🪶 Icarus crawl started — check the Icarus tab for results..."
@@ -1517,7 +2103,7 @@ icarus_btn.on_click(handle_icarus)
 tabs = pn.Tabs(
     ("Dashboard", main_tab),
     ("Deep Dive", chart_deep),
-    ("🪶 Icarus", icarus_panel.view()),
+    ("🪶 ICARUS AI", icarus_panel.view()),
     sizing_mode="stretch_width",
 )
 
@@ -1530,7 +2116,7 @@ tabs.param.watch(_on_tab_change, 'active')
 template = pn.template.FastListTemplate(
     title="SpendLens",
     sidebar=[sidebar_col],
-    main=[tabs],
+    main=[tabs, _fab_chat, _fab_toggle],
     accent_base_color=NAVY,
     header_background=NAVY,
     background_color=BG,

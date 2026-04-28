@@ -341,6 +341,122 @@ def extract_text(filename: str, content: bytes) -> str:
     return content.decode("utf-8", errors="replace")
 
 
+# ── Grok live-search ──────────────────────────────────────────────────────────
+# Groups the 11 spend categories into 3 topic clusters → 3 Grok calls per scan
+# instead of 11. Each call uses xAI live search to surface X posts + breaking news
+# that RSS feeds miss (exec announcements, regulatory filings, market moves).
+
+_GROK_CLUSTERS = [
+    {
+        "name": "Tech & Cloud Procurement",
+        "categories": ["Cloud & Compute", "IT Software & SaaS", "AI/ML APIs & Data",
+                       "Telecom & Voice", "Hardware & Equipment"],
+        "query": (
+            "latest news about cloud computing pricing, SaaS vendor consolidation, "
+            "AI API costs, semiconductor supply, hardware shortages, telecom regulation — "
+            "anything that affects corporate procurement or IT spend decisions"
+        ),
+    },
+    {
+        "name": "People & Professional Services",
+        "categories": ["Recruitment & HR", "Professional Services", "Marketing & Campaigns"],
+        "query": (
+            "latest news about freelancer market, contractor rates, professional services pricing, "
+            "consulting firm M&A, marketing agency fees, recruitment costs — "
+            "anything that affects procurement of external labour and services"
+        ),
+    },
+    {
+        "name": "Facilities, Real Estate & Travel",
+        "categories": ["Facilities & Office", "Real Estate", "Travel & Expenses"],
+        "query": (
+            "latest news about commercial real estate, office lease rates, corporate travel costs, "
+            "airline pricing, hotel rates, facilities management — "
+            "anything relevant to corporate facility and travel procurement"
+        ),
+    },
+]
+
+
+def _fetch_grok_articles(client_categories: list) -> list:
+    """
+    Fetch real-time procurement signals via Grok (xAI) live search.
+    Queries 3 topic clusters in parallel. Returns articles in the same
+    format as _fetch_feed() so they flow into Haiku batch analysis unchanged.
+    Silently returns [] if XAI_API_KEY is not set or any call fails.
+    """
+    api_key = os.environ.get("XAI_API_KEY", "")
+    if not api_key:
+        return []
+
+    try:
+        from openai import OpenAI as _OAI
+    except ImportError:
+        print("[Icarus] openai SDK not installed — pip install openai to enable Grok")
+        return []
+
+    client_cat_set = set(client_categories)
+    grok = _OAI(api_key=api_key, base_url="https://api.x.ai/v1")
+
+    def _query_cluster(cluster):
+        relevant = client_cat_set.intersection(set(cluster["categories"]))
+        if not relevant:
+            return []
+
+        prompt = (
+            "You are a procurement intelligence analyst with access to live news and social media.\n"
+            f"Search for the 5 most recent (last 7 days) high-impact news items about:\n{cluster['query']}\n\n"
+            "Prioritise: price shocks, supply disruptions, M&A, regulatory changes, executive statements.\n\n"
+            "Return ONLY a JSON array, no other text:\n"
+            '[{"headline":"...","summary":"max 120 chars","url":"https://...","source":"publisher","published":"YYYY-MM-DD"}]'
+        )
+
+        try:
+            resp = grok.chat.completions.create(
+                model="grok-3-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1500,
+                timeout=20,
+                # xAI live-search: pass via extra_body so the OpenAI SDK
+                # doesn't reject the unknown parameter
+                extra_body={"search_parameters": {"mode": "on", "return_citations": True}},
+            )
+            raw = resp.choices[0].message.content or ""
+            items = _parse_json(raw)
+            if not isinstance(items, list):
+                return []
+
+            articles = []
+            for item in items:
+                if not isinstance(item, dict) or not item.get("headline"):
+                    continue
+                articles.append({
+                    "source":               f"Grok · {item.get('source', cluster['name'])}",
+                    "headline":             str(item.get("headline", ""))[:200],
+                    "summary":              str(item.get("summary", ""))[:500],
+                    "url":                  item.get("url", ""),
+                    "relevant_categories":  list(relevant),
+                    "published":            item.get(
+                        "published",
+                        datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    ),
+                })
+            return articles
+
+        except Exception as e:
+            print(f"[Icarus] Grok cluster error ({cluster['name']}): {e}")
+            return []
+
+    results = []
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        for cluster_articles in ex.map(_query_cluster, _GROK_CLUSTERS):
+            results.extend(cluster_articles)
+
+    if results:
+        print(f"[Icarus] Grok live search: {len(results)} articles fetched")
+    return results
+
+
 # ── Scraping ──────────────────────────────────────────────────────────────────
 
 def fetch_articles(client_categories):
@@ -379,11 +495,23 @@ def fetch_articles(client_categories):
             print(f"[Icarus] Feed error ({feed_cfg['name']}): {e}")
             return []
 
-    # Fetch all feeds in parallel
+    # Fetch RSS feeds and Grok live-search concurrently.
+    # Grok runs in a separate thread while RSS feeds fan out in their own pool.
     articles = []
+    grok_result: list = []
+
+    def _run_grok():
+        grok_result.extend(_fetch_grok_articles(client_categories))
+
+    grok_thread = threading.Thread(target=_run_grok, daemon=True)
+    grok_thread.start()
+
     with ThreadPoolExecutor(max_workers=len(RSS_SOURCES)) as executor:
         for feed_articles in executor.map(_fetch_feed, RSS_SOURCES):
             articles.extend(feed_articles)
+
+    grok_thread.join(timeout=25)   # wait up to 25 s for Grok (RSS is already done)
+    articles.extend(grok_result)
 
     # Deduplicate by URL first, then headline
     seen_urls: set = set()

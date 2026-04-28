@@ -160,6 +160,16 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 
 ---
 
+## Recent Updates — 2026-04-26
+
+- **Risk Map redesigned** — log-scale x-axis prevents Cloud & Compute from dominating the chart; enlarged bubbles with full category labels; total spend badge pinned to top-left corner
+- **Treemap supplier drill-down** — two-level treemap (category → top 5 suppliers by spend); click a supplier to open a procurement intel card in-place with contract details, payment terms, price trend, discount status, and suggested action
+- **Market signals panel in Deep Dive** — supplier cards pull live Icarus signals from `icarus_memory.db`; "Fetch latest signals" button runs a fast RSS-only refresh (~5s, no Claude API call) filtered to the selected supplier
+- **Interactive spend comparison chart** — replaced the fixed CAGR bar; pick any start/end year to compare per-category growth; navy = base year spend, light blue = growth to end year; sorted by largest growth
+- **Capex/Opex redesigned as multi-year stacked bar** — shows all five years (2022–2026) side by side; Capex (navy) + Opex (green) stacked; built directly from category data, no year filter dependency
+
+---
+
 ## Project Status
 
 | Component | Status |
@@ -169,6 +179,12 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | Category mapper (chunked + cached) | ✅ Complete |
 | Flag engine | ✅ Complete |
 | CFO Excel export | ✅ Complete |
+| Dashboard — year-aware charts (all tabs) | ✅ Complete |
+| Dashboard — Risk Map (log-scale, bubbles, spend badge) | ✅ Complete |
+| Dashboard — Treemap with supplier drill-down | ✅ Complete |
+| Dashboard — Supplier intel cards & market signals | ✅ Complete |
+| Dashboard — Interactive spend comparison chart | ✅ Complete |
+| Dashboard — Capex/Opex multi-year stacked bar | ✅ Complete |
 | Icarus — RSS signal scanner | ✅ Live |
 | Icarus — Ask / query mode | ✅ Live |
 | Icarus — RFP & negotiation prep | ✅ Live |
