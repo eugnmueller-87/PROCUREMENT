@@ -221,6 +221,10 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | Supplier Risk Score | 📋 Planned |
 | Spend Forecast (Q+1) | 📋 Planned |
 | Multi-client support | 📋 Planned |
+| ECB FX Rates — auto-convert multi-currency spend to EUR | 🔨 Planned |
+| OpenCorporates — supplier legal registration enrichment | 🔨 Planned |
+| Quandl / Nasdaq Data Link — commodity price feeds for cost justification | 🔨 Planned |
+| Creditsafe / D&B — supplier financial health & insolvency risk | 🔨 Planned |
 
 ---
 
