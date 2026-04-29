@@ -90,6 +90,28 @@ SpendLens never overwrites previous data. Every upload appends to a transaction 
 
 ---
 
+## Category Strategy — AI-Powered Strategy Workbench
+
+The Category Strategy tab is where a category manager prepares, documents, and exports their procurement strategy — fully inside SpendLens, no external tools needed.
+
+**One click generates all 7 frameworks from live spend data + Icarus market signals:**
+
+| Framework | Output |
+|-----------|--------|
+| **Kraljic Matrix** | Positions the category (Strategic / Leverage / Bottleneck / Non-critical) with supply risk + profit impact scores, recommended posture, and key actions |
+| **PESTEL** | 3 procurement-impact bullet points per dimension, seeded from Icarus signals |
+| **SWOT** | Buyer-perspective 2×2 grid derived from spend data and market conditions |
+| **Porter's Five Forces** | Power assessment for all 5 forces with High/Medium/Low ratings and contributing factors |
+| **TCO Breakdown** | True cost beyond invoice price: implementation, integration, resource, compliance overhead |
+| **Negotiation Levers** | Prioritised levers with saving potential (%) and effort rating (Low/Medium/High) |
+| **Strategy Recommendation** | 3-year roadmap: Year 1 execution priorities, Year 2 build agenda, Year 3 vision, success KPIs |
+
+Results persist to SQLite — switching categories and returning later shows the saved strategy instantly, with no re-generation needed unless the market has moved.
+
+**Slide deck export:** The "Generate Strategy Deck" button downloads a standalone HTML file — 10 professional slides covering all frameworks. SpendLens logo top-right on every slide, navy/green color scheme. Opens in any browser; keyboard arrow keys or on-screen buttons navigate; `Ctrl+P` to print each slide as a page.
+
+---
+
 ## Icarus — Market Intelligence Agent
 
 Icarus is the live intelligence layer embedded in SpendLens. It answers the question procurement teams can never answer today: *is this price increase actually justified?*
@@ -114,20 +136,23 @@ When AWS raises your bill 18%, SpendLens doesn't just show you the number. It sh
 ## Architecture
 
 ```
-app.py                      — Panel dashboard, tab layout, upload orchestration
-icarus.py                   — Market intelligence agent (RSS, Claude API, SQLite)
-icarus_ui.py                — Icarus Panel UI component
+app.py                          — Panel dashboard, tab layout, upload orchestration
+icarus.py                       — Market intelligence agent (RSS, Claude API, SQLite)
+icarus_ui.py                    — Icarus Panel UI component
+category_strategy_ui.py         — Category Strategy Panel UI component
 modules/
-  column_mapper.py          — Schema normalization (fuzzy + Claude fallback)
-  data_cleanup.py           — Spend normalization, deduplication
-  category_mapper.py        — AI vendor classification (chunked + cached)
-  flag_engine.py            — Compliance & risk flag derivation
-  database.py               — SQLite persistence (WAL mode, hash dedup)
-  cfo_reports.py            — Excel export generation
+  column_mapper.py              — Schema normalization (fuzzy + Claude fallback)
+  data_cleanup.py               — Spend normalization, deduplication
+  category_mapper.py            — AI vendor classification (chunked + cached)
+  flag_engine.py                — Compliance & risk flag derivation
+  database.py                   — SQLite persistence (WAL mode, hash dedup)
+  cfo_reports.py                — Excel export generation
+  category_strategy.py          — Category strategy AI calls + SQLite persistence
+  deck_generator.py             — Standalone HTML slide deck generator
 ```
 
 **Persistence:**
-- `clients/{name}/spendlens.db` — per-client SQLite database. Tables: `uploads`, `transactions_raw`, `transactions_enriched`, `vendors`, `matches`
+- `clients/{name}/spendlens.db` — per-client SQLite. Tables: `uploads`, `transactions_raw`, `transactions_enriched`, `vendors`, `matches`, `category_strategies`
 - `clients/{name}/icarus_memory.db` — Icarus signals, feedback, category weights
 - `vendor_cache.json` — vendor→category cache; survives restarts, minimises API costs
 
@@ -153,6 +178,7 @@ modules/
 ## Recent Updates
 
 **April 2026**
+- **Category Strategy tab** — AI-powered strategy workbench with 7 procurement frameworks (Kraljic, PESTEL, SWOT, Porter's Five Forces, TCO, Negotiation Levers, 3-year Recommendation). One click generates all from live spend + Icarus signals. Results persist to SQLite. Exports a professional 10-slide HTML deck with SpendLens branding.
 - **Grok (xAI) live search integrated** — Icarus now queries Grok-3-mini alongside RSS feeds; 3 topic-cluster calls per scan surface real-time X posts and breaking news before it reaches RSS; ~$0.002/scan extra cost
 - **ICARUS AI data interpretation strips** — each Deep Dive chart now shows 3 procurement-focused insight bullets derived from live spend data: maverick spend / PO coverage risk, budget overrun alerts, single-source exposure, contract coverage gaps, Capex/Opex ratio vs industry benchmark
 - **Period-aware spend analysis** — changing the From/To year selector instantly recalculates all insight bullets from local data (no API call); shows fastest growers, largest absolute mover, and PO compliance for the exact selected period
@@ -219,10 +245,14 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | Icarus — Period-aware spend insight bullets | ✅ Live |
 | Icarus — Feedback learning loop | 🔨 In progress |
 | Compliance Scorecard tab — EcoVadis-style cards, ABC tiers, inline editing | ✅ Live |
+| Category Strategy — 7 AI frameworks (Kraljic, PESTEL, SWOT, Porter's, TCO, Levers, Recommendation) | ✅ Live |
+| Category Strategy — HTML slide deck export (10 slides, SpendLens branded) | ✅ Live |
 | Spend Variance Analysis | 📋 Planned |
 | Supplier Risk Score | 📋 Planned |
 | Spend Forecast (Q+1) | 📋 Planned |
 | Multi-client support | 📋 Planned |
+| Mobile — Telegram bot (signal push, scan on demand) | 📋 Planned |
+| Mobile — Slack bot (signal push, weekly brief, scan on demand) | 📋 Planned |
 | ECB FX Rates — auto-convert multi-currency spend to EUR | 🔨 Planned |
 | OpenCorporates — supplier legal registration enrichment | 🔨 Planned |
 | Quandl / Nasdaq Data Link — commodity price feeds for cost justification | 🔨 Planned |

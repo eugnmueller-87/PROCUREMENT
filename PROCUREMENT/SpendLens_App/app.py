@@ -33,7 +33,8 @@ from modules.category_mapper import run_category_mapping
 from modules.flag_engine     import run_flag_engine
 from modules.database        import (init_database, get_connection, log_upload,
                                       insert_raw_transactions, insert_enriched_transactions,
-                                      bulk_upsert_vendors, get_full_transaction_view)
+                                      bulk_upsert_vendors, get_full_transaction_view,
+                                      get_vendor_detail_map)
 from modules.cfo_reports        import export_cfo_excel
 from modules.supplier_profiler import (
     compute_and_save_profiles, get_supplier_profiles, build_demo_profiles,
@@ -1422,6 +1423,7 @@ from html import escape as _esc
 _RISK_BADGE = {"Critical": RED, "High": YELLOW, "Medium": "#E67E22", "Low": GREEN}
 
 _sc_df: pd.DataFrame = build_demo_profiles()
+_sc_detail_map: dict = {}
 
 _sc_score_pane = pn.pane.HTML("", sizing_mode="stretch_width")
 _sc_cards_pane = pn.pane.HTML("", sizing_mode="stretch_width")
@@ -1450,6 +1452,11 @@ _sc_sort = pn.widgets.Select(
     name="Sort by", value="Score ↓",
     options=["Score ↓", "Score ↑", "Spend ↓", "Tier A→C", "Expiry ↑"],
     width=130,
+)
+_sc_country_filter = pn.widgets.Select(
+    name="Country", value="All",
+    options=["All"],
+    width=140,
 )
 
 
@@ -1582,7 +1589,130 @@ function scEditCard(el,field){
 </script>"""
 
 
-def _build_sc_cards_html(df: pd.DataFrame) -> str:
+def _build_vendor_detail_html(detail: dict) -> str:
+    """Render the three rich panels shown inside an expanded supplier card."""
+    if not detail:
+        return ""
+
+    # ── Spend trend SVG ────────────────────────────────────────────────────────
+    monthly = detail.get("monthly", [])
+    if monthly:
+        max_amt = max((m["amount"] for m in monthly), default=1) or 1
+        bar_w, bar_gap, chart_h = 28, 6, 48
+        bars_html = ""
+        for idx, m in enumerate(monthly):
+            bar_h = max(2, int(m["amount"] / max_amt * chart_h))
+            x = idx * (bar_w + bar_gap)
+            label = m["month"][-5:]  # "MM-YY" style
+            amt_k = f"€{m['amount']/1000:.0f}K" if m["amount"] >= 1000 else f"€{m['amount']:.0f}"
+            bars_html += (
+                f'<rect x="{x}" y="{chart_h - bar_h}" width="{bar_w}" height="{bar_h}" '
+                f'rx="3" fill="#1B2A4A" opacity="0.75">'
+                f'<title>{label}: {amt_k}</title></rect>'
+                f'<text x="{x + bar_w//2}" y="{chart_h + 12}" text-anchor="middle" '
+                f'font-size="8" fill="#64748B">{label}</text>'
+            )
+        total_w = len(monthly) * (bar_w + bar_gap)
+        trend_html = (
+            f'<div style="margin-bottom:14px;">'
+            f'<div style="font-size:10px;text-transform:uppercase;color:#64748B;'
+            f'letter-spacing:0.5px;margin-bottom:6px;">6-Month Spend Trend</div>'
+            f'<svg width="{total_w}" height="{chart_h + 16}" overflow="visible">'
+            f'{bars_html}</svg></div>'
+        )
+    else:
+        trend_html = ""
+
+    # ── PO breakdown bar ───────────────────────────────────────────────────────
+    pb = detail.get("po_breakdown", {})
+    with_po = pb.get("with_po", 0)
+    no_po   = pb.get("no_po", 0)
+    unk     = pb.get("unknown", 0)
+    total   = max(with_po + no_po + unk, 1)
+    pct_w   = lambda n: f"{n / total * 100:.1f}%"
+    po_bar = (
+        f'<div style="margin-bottom:14px;">'
+        f'<div style="font-size:10px;text-transform:uppercase;color:#64748B;'
+        f'letter-spacing:0.5px;margin-bottom:6px;">PO Breakdown  '
+        f'<span style="font-weight:normal;color:#94A3B8;">({total} transactions)</span></div>'
+        f'<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;'
+        f'background:#F1F5F9;width:100%;max-width:380px;">'
+        f'<div style="width:{pct_w(with_po)};background:#00A86B;" title="With PO: {with_po}"></div>'
+        f'<div style="width:{pct_w(no_po)};background:#E74C3C;" title="No PO: {no_po}"></div>'
+        f'<div style="width:{pct_w(unk)};background:#CBD5E1;" title="Unknown: {unk}"></div>'
+        f'</div>'
+        f'<div style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:#64748B;">'
+        f'<span><span style="color:#00A86B;">■</span> With PO: {with_po}</span>'
+        f'<span><span style="color:#E74C3C;">■</span> No PO: {no_po}</span>'
+        f'<span><span style="color:#CBD5E1;">■</span> Unknown: {unk}</span>'
+        f'</div></div>'
+    )
+
+    # ── Recent transactions table ──────────────────────────────────────────────
+    txns = detail.get("recent_txns", [])
+    contracts = detail.get("contracts", [])
+    if txns:
+        _PO_COLOR = {"With PO": "#00A86B", "Blanket PO": "#2196F3",
+                     "No PO": "#E74C3C", "Unknown": "#94A3B8"}
+        rows_html = ""
+        for t in txns:
+            amt = t["amount"]
+            amt_str = f"€{amt/1000:.1f}M" if amt >= 1_000_000 else (
+                      f"€{amt/1000:.1f}K" if amt >= 1000 else f"€{amt:.0f}")
+            po_col = _PO_COLOR.get(t["po_status"], "#94A3B8")
+            po_badge = (
+                f'<span style="font-size:9px;font-weight:600;padding:1px 6px;'
+                f'border-radius:99px;background:{po_col}22;color:{po_col};">'
+                f'{t["po_status"]}</span>'
+            )
+            rows_html += (
+                f'<tr style="border-bottom:1px solid #F1F5F9;">'
+                f'<td style="padding:5px 8px 5px 0;font-size:11px;color:#64748B;white-space:nowrap;">{t["date"]}</td>'
+                f'<td style="padding:5px 8px;font-size:11px;font-weight:600;color:#1B2A4A;white-space:nowrap;">{amt_str}</td>'
+                f'<td style="padding:5px 8px;font-size:10px;color:#475569;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{t["description"]}</td>'
+                f'<td style="padding:5px 0 5px 8px;font-size:10px;color:#64748B;white-space:nowrap;">{t["po_number"]}</td>'
+                f'<td style="padding:5px 0 5px 8px;">{po_badge}</td>'
+                f'</tr>'
+            )
+        txn_html = (
+            f'<div style="margin-bottom:10px;">'
+            f'<div style="font-size:10px;text-transform:uppercase;color:#64748B;'
+            f'letter-spacing:0.5px;margin-bottom:6px;">Recent Transactions</div>'
+            f'<div style="overflow-x:auto;">'
+            f'<table style="width:100%;border-collapse:collapse;font-family:-apple-system,sans-serif;">'
+            f'<thead><tr style="border-bottom:2px solid #E2E8F0;">'
+            f'<th style="padding:4px 8px 4px 0;font-size:9px;text-transform:uppercase;'
+            f'color:#94A3B8;font-weight:600;text-align:left;">Date</th>'
+            f'<th style="padding:4px 8px;font-size:9px;text-transform:uppercase;'
+            f'color:#94A3B8;font-weight:600;text-align:left;">Amount</th>'
+            f'<th style="padding:4px 8px;font-size:9px;text-transform:uppercase;'
+            f'color:#94A3B8;font-weight:600;text-align:left;">Description</th>'
+            f'<th style="padding:4px 8px;font-size:9px;text-transform:uppercase;'
+            f'color:#94A3B8;font-weight:600;text-align:left;">PO #</th>'
+            f'<th style="padding:4px 8px;font-size:9px;text-transform:uppercase;'
+            f'color:#94A3B8;font-weight:600;text-align:left;">Status</th>'
+            f'</tr></thead><tbody>{rows_html}</tbody></table></div>'
+        )
+        if contracts:
+            clist = "  ·  ".join(contracts[:5])
+            txn_html += (
+                f'<div style="margin-top:8px;font-size:10px;color:#64748B;">'
+                f'<span style="font-weight:600;color:#1B2A4A;">Contract IDs:</span> {clist}</div>'
+            )
+        txn_html += '</div>'
+    else:
+        txn_html = (
+            '<div style="font-size:11px;color:#94A3B8;padding:8px 0;">'
+            'No transaction history available.</div>'
+        )
+
+    return (
+        f'<div style="border-top:1px solid #F0F4FF;margin-top:8px;padding-top:14px;">'
+        f'{trend_html}{po_bar}{txn_html}</div>'
+    )
+
+
+def _build_sc_cards_html(df: pd.DataFrame, detail_map: dict | None = None) -> str:
     """Build the full EcoVadis-style supplier card list as an HTML string."""
     if df.empty:
         return (
@@ -1596,6 +1726,7 @@ def _build_sc_cards_html(df: pd.DataFrame) -> str:
         vendor     = str(row.get("vendor_name", ""))
         vendor_esc = _esc(vendor)
         category   = str(row.get("category", "Unknown"))
+        country    = str(row.get("country") or "")
         tier       = str(row.get("tier", "C"))
         rel        = str(row.get("relationship_status", "Transactional"))
         score      = float(row.get("compliance_score", 0))
@@ -1654,7 +1785,7 @@ def _build_sc_cards_html(df: pd.DataFrame) -> str:
     <div class="sc-tier sc-tier-{tier}" title="Tier {tier}">{tier}</div>
     <div style="flex:1;min-width:0;overflow:hidden;">
       <div style="font-size:14px;font-weight:700;color:#1B3A6B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{vendor_esc}</div>
-      <div style="font-size:11px;color:#64748B;">{_esc(category)}</div>
+      <div style="font-size:11px;color:#64748B;">{_esc(category)}{f' · {_esc(country)}' if country else ''}</div>
     </div>
     <span title="{_esc(tip)}" style="font-size:18px;cursor:default;flex-shrink:0;">{icon}</span>
     <span class="sc-rel sc-rel-{rel_cls}">{_esc(rel)}</span>
@@ -1699,6 +1830,7 @@ def _build_sc_cards_html(df: pd.DataFrame) -> str:
         <select class="sc-sel" onchange="scEditCard(this,'relationship_status')">{rel_opts}</select>
       </div>
     </div>
+    {_build_vendor_detail_html((detail_map or {}).get(vendor, {}))}
   </div>
 </div>"""
 
@@ -1707,17 +1839,20 @@ def _build_sc_cards_html(df: pd.DataFrame) -> str:
 
 def _refresh_sc_cards(*_):
     """Rebuild card HTML based on current filter and sort settings."""
-    global _sc_df
+    global _sc_df, _sc_detail_map
     df = _sc_df.copy()
-    cat  = _sc_cat_filter.value
-    risk = _sc_risk_filter.value
-    cs   = _sc_cs_filter.value
-    sort = _sc_sort.value
+    cat     = _sc_cat_filter.value
+    risk    = _sc_risk_filter.value
+    cs      = _sc_cs_filter.value
+    sort    = _sc_sort.value
+    country = _sc_country_filter.value
 
     if cat != "All":
         df = df[df["category"] == cat]
     if risk != "All":
         df = df[df["risk_level"] == risk]
+    if country != "All":
+        df = df[df.get("country", pd.Series(dtype=str)) == country] if "country" in df.columns else df
 
     if cs == "Expiring Soon":
         today = _date.today()
@@ -1749,7 +1884,7 @@ def _refresh_sc_cards(*_):
             _exp=pd.to_datetime(df["contract_end"], errors="coerce")
         ).sort_values("_exp", na_position="last").drop(columns="_exp")
 
-    _sc_cards_pane.object = _build_sc_cards_html(df)
+    _sc_cards_pane.object = _build_sc_cards_html(df, _sc_detail_map)
 
 
 def _on_sc_edit(event):
@@ -1779,17 +1914,24 @@ _sc_cat_filter.param.watch(_refresh_sc_cards, "value")
 _sc_risk_filter.param.watch(_refresh_sc_cards, "value")
 _sc_cs_filter.param.watch(_refresh_sc_cards, "value")
 _sc_sort.param.watch(_refresh_sc_cards, "value")
+_sc_country_filter.param.watch(_refresh_sc_cards, "value")
 
 
 def refresh_compliance_tab():
     """Reload supplier data and redraw the Compliance Scorecard."""
-    global _sc_df
+    global _sc_df, _sc_detail_map
     try:
         conn = get_connection("default")
         _sc_df = get_supplier_profiles(conn, "default")
+        _sc_detail_map = get_vendor_detail_map(conn)
         conn.close()
     except Exception:
         _sc_df = build_demo_profiles()
+        _sc_detail_map = {}
+    if "country" in _sc_df.columns:
+        countries = sorted(_sc_df["country"].dropna().unique().tolist())
+        countries = [c for c in countries if c]
+        _sc_country_filter.options = ["All"] + countries
     _sc_score_pane.object = _build_sc_score_html(_sc_df)
     _refresh_sc_cards()
 
@@ -1800,7 +1942,7 @@ _sc_filter_row = pn.Row(
         f'font-family:-apple-system,sans-serif;line-height:32px;">Filters:</span>',
         width=55, align="center",
     ),
-    _sc_cat_filter, _sc_risk_filter, _sc_cs_filter, _sc_sort,
+    _sc_cat_filter, _sc_risk_filter, _sc_cs_filter, _sc_country_filter, _sc_sort,
     sizing_mode="stretch_width",
     styles={"padding": "4px 0 10px"},
     align="center",
@@ -2574,17 +2716,21 @@ def handle_icarus(event):
 
 icarus_btn.on_click(handle_icarus)
 
+from category_strategy_ui import CategoryStrategyPanel
+cat_strategy_panel = CategoryStrategyPanel(client_name="default")
+
 tabs = pn.Tabs(
     ("Dashboard", main_tab),
     ("Deep Dive", chart_deep),
     ("📋 Compliance", _compliance_tab),
     ("🪶 ICARUS AI", icarus_panel.view()),
+    ("📊 Category Strategy", cat_strategy_panel.view()),
     sizing_mode="stretch_width",
 )
 
-# Hide dashboard sidebar when user switches to the Icarus tab (index 2)
+# Hide sidebar on Icarus (index 3) and Category Strategy (index 4) tabs
 def _on_tab_change(event):
-    _dash_sidebar.visible = (event.new != 3)  # hide sidebar on ICARUS AI tab (index 3)
+    _dash_sidebar.visible = event.new not in (3, 4)
 
 tabs.param.watch(_on_tab_change, 'active')
 
