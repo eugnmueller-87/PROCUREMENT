@@ -26,6 +26,14 @@ from modules.category_strategy import (
     load_strategy,
     generate_all_frameworks,
     get_category_spend_data,
+    save_framework,
+    generate_kraljic,
+    generate_pestel,
+    generate_swot,
+    generate_porter,
+    generate_tco,
+    generate_levers,
+    generate_recommendation,
 )
 from modules.deck_generator import generate_strategy_deck
 
@@ -63,14 +71,14 @@ _CSS = """<style>
 /* Kraljic */
 .kq-wrap{display:flex;gap:18px;align-items:flex-start;}
 .kq-matrix{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
-  gap:5px;width:280px;height:200px;flex-shrink:0;}
-.kq{border-radius:7px;padding:9px 11px;display:flex;flex-direction:column;
+  gap:6px;width:400px;height:300px;flex-shrink:0;}
+.kq{border-radius:9px;padding:14px 16px;display:flex;flex-direction:column;
   justify-content:flex-end;opacity:0.45;}
-.kq.active{opacity:1;box-shadow:0 0 0 2.5px #1B2A4A;z-index:1;}
+.kq.active{opacity:1;box-shadow:0 0 0 3px #1B2A4A;z-index:1;}
 .kq-strategic{background:#EBF0FB;}.kq-bottleneck{background:#FFF3E0;}
 .kq-leverage{background:#E1F5EE;}.kq-non-critical{background:#f8f9fa;border:1px dashed #ddd;}
-.kq-name{font-size:11px;font-weight:700;color:#1B2A4A;}
-.kq-desc{font-size:9px;color:#64748B;margin-top:1px;}
+.kq-name{font-size:14px;font-weight:700;color:#1B2A4A;}
+.kq-desc{font-size:11px;color:#64748B;margin-top:3px;}
 .kq-side{flex:1;}
 .kq-scores{display:flex;gap:8px;margin-bottom:12px;}
 .kq-score{flex:1;background:#f8f9fa;border-radius:7px;padding:8px;text-align:center;}
@@ -270,12 +278,12 @@ def _build_kraljic_html(data: dict, updated_at: str = None) -> str:
     <div class="cs-body">
       <div class="kq-wrap">
         <div>
-          <div style="font-size:9px;color:#64748B;font-weight:600;text-align:center;margin-bottom:3px;">
+          <div style="font-size:11px;color:#64748B;font-weight:600;text-align:center;margin-bottom:5px;">
             &#x2190; Low Profit Impact &nbsp;|&nbsp; High Profit Impact &#x2192;
           </div>
           <div style="display:flex;gap:5px;">
-            <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;
-              color:#64748B;font-weight:600;text-align:center;flex-shrink:0;width:16px;">
+            <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;
+              color:#64748B;font-weight:600;text-align:center;flex-shrink:0;width:18px;">
               High Risk &uarr;
             </div>
             <div class="kq-matrix">
@@ -285,7 +293,7 @@ def _build_kraljic_html(data: dict, updated_at: str = None) -> str:
               {_qd("Leverage",     "kq-leverage",     "Low risk &middot; High impact",  "↑")}
             </div>
           </div>
-          <div style="font-size:9px;color:#64748B;font-weight:600;text-align:center;margin-top:3px;">
+          <div style="font-size:11px;color:#64748B;font-weight:600;text-align:center;margin-top:5px;">
             &#x2193; Low Risk
           </div>
         </div>
@@ -528,6 +536,17 @@ _FRAMEWORK_BUILDERS = {
 
 # ── Panel Component ───────────────────────────────────────────────────────────
 
+_COUNTRY_OPTIONS = {
+    "All Regions":     None,
+    "DE — Germany":    ["DE"],
+    "EU — Europe":     ["EU", "DE", "FR", "NL", "ES", "IT", "PL", "AT", "BE"],
+    "UK":              ["UK", "GB"],
+    "US":              ["US"],
+    "FR — France":     ["FR"],
+    "Global":          ["Global"],
+}
+
+
 class CategoryStrategyPanel(param.Parameterized):
     client_name = param.String(default="default")
 
@@ -538,6 +557,8 @@ class CategoryStrategyPanel(param.Parameterized):
         self._strategies     = {}
         self._loading        = False
         self._fw_buttons     = {}
+        self._country_key    = "All Regions"
+        self._gen_single_btn = None  # set in view()
 
         init_strategy_table(self.client_name)
         self._strategies = load_strategy(self.client_name, self._category)
@@ -567,6 +588,9 @@ class CategoryStrategyPanel(param.Parameterized):
         self._active_fw = fw_key
         for k, btn in self._fw_buttons.items():
             btn.button_type = "primary" if k == fw_key else "light"
+        if self._gen_single_btn is not None:
+            label = FRAMEWORK_LABELS.get(fw_key, fw_key)
+            self._gen_single_btn.name = f"↻ {label}"
         self._render_active()
 
     # ── Category change ───────────────────────────────────────────────────────
@@ -588,10 +612,12 @@ class CategoryStrategyPanel(param.Parameterized):
                 self._category, fw_key, step, total
             )
 
+        selected_countries = _COUNTRY_OPTIONS.get(self._country_key)
+
         def _do():
             try:
                 import icarus
-                signals = icarus.get_recent_signals(limit=200)
+                signals = icarus.get_recent_signals(limit=300)
             except Exception:
                 signals = []
             try:
@@ -600,9 +626,63 @@ class CategoryStrategyPanel(param.Parameterized):
                     self._category,
                     icarus_signals=signals,
                     progress_cb=_progress,
+                    countries=selected_countries,
                 )
             except Exception as e:
                 print(f"[CategoryStrategyPanel] generate error: {e}")
+            finally:
+                self._loading = False
+                self._render_active()
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def generate_single(self):
+        """Generate only the currently active framework tab (uses signals ≤7 days)."""
+        if self._loading:
+            return
+        fw_key = self._active_fw
+        self._loading = True
+        selected_countries = _COUNTRY_OPTIONS.get(self._country_key)
+
+        _SINGLE_GENERATORS = {
+            "kraljic": lambda sd, sig: generate_kraljic(self._category, sd, sig, selected_countries),
+            "pestel":  lambda sd, sig: generate_pestel(self._category, sd, sig, selected_countries),
+            "swot":    lambda sd, sig: generate_swot(self._category, sd, sig, selected_countries),
+            "porter":  lambda sd, sig: generate_porter(self._category, sd, sig, selected_countries),
+            "tco":     lambda sd, sig: generate_tco(self._category, sd, sig, selected_countries),
+            "levers":  lambda sd, sig: generate_levers(self._category, sd, sig, selected_countries),
+        }
+
+        label = FRAMEWORK_LABELS.get(fw_key, fw_key)
+
+        def _progress_single():
+            from modules.category_strategy import FRAMEWORK_LABELS as FL
+            self._content_pane.object = _build_generating_html(
+                self._category, fw_key, 1, 1
+            )
+
+        def _do():
+            _progress_single()
+            try:
+                import icarus
+                signals = icarus.get_recent_signals(limit=300, days=7)
+            except Exception:
+                signals = []
+            try:
+                spend_data = get_category_spend_data(self.client_name, self._category)
+                if fw_key == "recommendation":
+                    data = generate_recommendation(self._category, self._strategies, spend_data)
+                else:
+                    fn = _SINGLE_GENERATORS.get(fw_key)
+                    if fn is None:
+                        return
+                    data = fn(spend_data, signals)
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc).isoformat()
+                save_framework(self.client_name, self._category, fw_key, data)
+                self._strategies[fw_key] = {"data": data, "updated_at": now}
+            except Exception as e:
+                print(f"[CategoryStrategyPanel] generate_single error ({fw_key}): {e}")
             finally:
                 self._loading = False
                 self._render_active()
@@ -638,6 +718,19 @@ class CategoryStrategyPanel(param.Parameterized):
             stylesheets=[_sel_ss],
         )
         cat_select.param.watch(self._on_category_change, "value")
+
+        # ── Country / region selector ──────────────────────────────────────────
+        country_select = pn.widgets.Select(
+            options=list(_COUNTRY_OPTIONS.keys()),
+            value=self._country_key,
+            width=160,
+            stylesheets=[_sel_ss],
+        )
+
+        def _on_country_change(event):
+            self._country_key = event.new
+
+        country_select.param.watch(_on_country_change, "value")
 
         # ── Framework tab buttons ─────────────────────────────────────────────
         _pill_ss = """
@@ -693,19 +786,43 @@ class CategoryStrategyPanel(param.Parameterized):
         )
 
         # ── Generate button ───────────────────────────────────────────────────
+        _btn_ss_primary = """
+            .bk-btn{
+              height:34px;padding:0 16px;border-radius:8px;font-size:12px;
+              font-weight:700;background:#1B2A4A;border-color:#1B2A4A;color:white;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+            }
+            .bk-btn:hover{background:#2E5BA8;border-color:#2E5BA8;}
+        """
         gen_btn = pn.widgets.Button(
             name="Generate All Frameworks",
             button_type="primary",
-            stylesheets=["""
-                .bk-btn{
-                  height:34px;padding:0 16px;border-radius:8px;font-size:12px;
-                  font-weight:700;background:#1B2A4A;border-color:#1B2A4A;color:white;
-                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                }
-                .bk-btn:hover{background:#2E5BA8;border-color:#2E5BA8;}
-            """],
+            stylesheets=[_btn_ss_primary],
         )
         gen_btn.on_click(lambda e: self.generate_all())
+
+        first_label = FRAMEWORK_LABELS.get(self._active_fw, self._active_fw)
+        gen_single_btn = pn.widgets.Button(
+            name=f"↻ {first_label}",
+            button_type="light",
+            stylesheets=["""
+                .bk-btn{
+                  height:34px;padding:0 14px;border-radius:8px;font-size:12px;
+                  font-weight:700;border:1.5px solid #1B2A4A;color:#1B2A4A;background:white;
+                  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                }
+                .bk-btn:hover{background:#EFF3FB;}
+            """],
+        )
+        gen_single_btn.on_click(lambda e: self.generate_single())
+        self._gen_single_btn = gen_single_btn
+
+        freshness_note = pn.pane.HTML(
+            "<span style='font-size:10px;color:#bbb;"
+            "font-family:-apple-system,sans-serif;'>"
+            "Signals: max 7 days"
+            "</span>",
+        )
 
         # ── Deck download ─────────────────────────────────────────────────────
         deck_btn = pn.widgets.FileDownload(
@@ -739,7 +856,10 @@ class CategoryStrategyPanel(param.Parameterized):
                 align="center",
             ),
             cat_select,
+            country_select,
             pn.layout.HSpacer(),
+            freshness_note,
+            gen_single_btn,
             gen_btn,
             deck_btn,
             hint,

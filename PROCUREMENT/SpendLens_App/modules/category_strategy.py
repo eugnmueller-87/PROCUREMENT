@@ -168,6 +168,67 @@ def _spend_summary(spend_data: dict) -> str:
     return " | ".join(parts)
 
 
+def _signals_context(
+    icarus_signals: list,
+    category: str,
+    countries: list = None,
+    limit: int = 6,
+    min_relevance: int = 6,
+) -> str:
+    """
+    Build a structured signals block for injection into framework prompts.
+    Filters by category match, optional country filter, and minimum relevance.
+    Returns empty string when no signals match.
+    """
+    if not icarus_signals:
+        return ""
+
+    country_set = {c.upper() for c in countries} if countries else None
+
+    filtered = []
+    for s in icarus_signals:
+        if s.get("category") != category:
+            continue
+        if s.get("relevance", 0) < min_relevance:
+            continue
+        if country_set:
+            sig_countries = s.get("countries") or []
+            if isinstance(sig_countries, str):
+                try:
+                    sig_countries = json.loads(sig_countries)
+                except Exception:
+                    sig_countries = []
+            # Keep signal if it has no country tag (older data) or matches the filter
+            if sig_countries and not country_set.intersection(c2.upper() for c2 in sig_countries):
+                continue
+        filtered.append(s)
+
+    filtered = sorted(filtered, key=lambda x: x.get("relevance", 0), reverse=True)[:limit]
+    if not filtered:
+        return ""
+
+    lines = ["\n\nRecent market intelligence (from Icarus scans):"]
+    for s in filtered:
+        impact_marker = {"positive": "+", "negative": "!", "neutral": "~"}.get(
+            s.get("impact", "neutral"), "~"
+        )
+        country_tag = ""
+        sig_countries = s.get("countries") or []
+        if isinstance(sig_countries, str):
+            try:
+                sig_countries = json.loads(sig_countries)
+            except Exception:
+                sig_countries = []
+        if sig_countries:
+            country_tag = f" [{', '.join(sig_countries)}]"
+        lines.append(
+            f"[{impact_marker}]{country_tag} {s.get('headline', '')} "
+            f"(relevance {s.get('relevance')}/10) — {s.get('summary', '')} "
+            f"→ Action: {s.get('action', '')}"
+        )
+    return "\n".join(lines)
+
+
 # ── Claude API ────────────────────────────────────────────────────────────────
 
 def _call_claude(prompt: str) -> dict:
@@ -190,10 +251,12 @@ def _call_claude(prompt: str) -> dict:
 
 # ── Framework generators ──────────────────────────────────────────────────────
 
-def generate_kraljic(category: str, spend_data: dict, icarus_signals: list = None) -> dict:
+def generate_kraljic(category: str, spend_data: dict, icarus_signals: list = None,
+                     countries: list = None) -> dict:
+    signals_ctx = _signals_context(icarus_signals, category, countries, limit=4)
     return _call_claude(f"""Position the "{category}" procurement category on a Kraljic Matrix.
 
-Spend context: {_spend_summary(spend_data)}
+Spend context: {_spend_summary(spend_data)}{signals_ctx}
 
 Assess supply risk (1-10): market concentration, qualified supplier count, supply chain complexity, substitutability.
 Assess profit impact (1-10): annual spend volume, operational criticality, competitive advantage impact.
@@ -209,20 +272,15 @@ Return JSON:
 }}""")
 
 
-def generate_pestel(category: str, spend_data: dict, icarus_signals: list = None) -> dict:
-    signals_ctx = ""
-    if icarus_signals:
-        relevant = [s for s in icarus_signals if s.get("category") == category][:5]
-        if relevant:
-            signals_ctx = "\nRecent market signals: " + " | ".join(
-                s.get("headline", "") for s in relevant
-            )
-
+def generate_pestel(category: str, spend_data: dict, icarus_signals: list = None,
+                    countries: list = None) -> dict:
+    signals_ctx = _signals_context(icarus_signals, category, countries, limit=6)
+    country_focus = f"\nGeographic focus: {', '.join(countries)}." if countries else ""
     return _call_claude(f"""Generate a PESTEL analysis for the "{category}" procurement category.
 
-Spend context: {_spend_summary(spend_data)}{signals_ctx}
+Spend context: {_spend_summary(spend_data)}{country_focus}{signals_ctx}
 
-Focus on procurement impact. Return JSON with exactly 3 concise bullet points per dimension:
+Focus on procurement impact. Where market intelligence signals are provided above, incorporate them into the relevant PESTEL dimension. Return JSON with exactly 3 concise bullet points per dimension:
 {{
   "political":     ["<point>", "<point>", "<point>"],
   "economic":      ["<point>", "<point>", "<point>"],
@@ -233,21 +291,17 @@ Focus on procurement impact. Return JSON with exactly 3 concise bullet points pe
 }}""")
 
 
-def generate_swot(category: str, spend_data: dict, icarus_signals: list = None) -> dict:
-    signals_ctx = ""
-    if icarus_signals:
-        relevant = [s for s in icarus_signals if s.get("category") == category][:5]
-        if relevant:
-            signals_ctx = "\nRecent market signals: " + " | ".join(
-                s.get("headline", "") for s in relevant
-            )
-
+def generate_swot(category: str, spend_data: dict, icarus_signals: list = None,
+                  countries: list = None) -> dict:
+    signals_ctx = _signals_context(icarus_signals, category, countries, limit=5)
+    country_focus = f"\nGeographic focus: {', '.join(countries)}." if countries else ""
     return _call_claude(f"""Generate a SWOT analysis for the "{category}" procurement category from the buyer's perspective.
 
-Spend context: {_spend_summary(spend_data)}{signals_ctx}
+Spend context: {_spend_summary(spend_data)}{country_focus}{signals_ctx}
 
 Strengths = current buyer advantages. Weaknesses = buyer gaps/vulnerabilities.
 Opportunities = exploitable market conditions. Threats = external risks to our position.
+Where market intelligence signals are provided above, incorporate the most relevant ones into Opportunities or Threats.
 
 Return JSON with exactly 3 points per quadrant:
 {{
@@ -258,26 +312,36 @@ Return JSON with exactly 3 points per quadrant:
 }}""")
 
 
-def generate_porter(category: str, spend_data: dict, icarus_signals: list = None) -> dict:
+def generate_porter(category: str, spend_data: dict, icarus_signals: list = None,
+                    countries: list = None) -> dict:
+    signals_ctx = _signals_context(icarus_signals, category, countries, limit=5)
+    country_focus = f"\nGeographic focus: {', '.join(countries)}." if countries else ""
     return _call_claude(f"""Analyze Porter's Five Forces for the "{category}" procurement market from the buyer's perspective.
 
-Spend context: {_spend_summary(spend_data)}
+Spend context: {_spend_summary(spend_data)}{country_focus}{signals_ctx}
+
+Where market intelligence signals are provided above, use them to calibrate the force scores — e.g. a signal about supplier consolidation raises supplier power, a signal about new entrants lowers that barrier score.
 
 Return JSON:
 {{
-  "supplier_power":       {{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>"]}},
-  "buyer_power":          {{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>"]}},
-  "competitive_rivalry":  {{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>"]}},
-  "threat_of_substitutes":{{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>"]}},
-  "threat_of_new_entrants":{{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>"]}},
+  "supplier_power":       {{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>", "<factor>", "<factor>", "<factor>"]}},
+  "buyer_power":          {{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>", "<factor>", "<factor>", "<factor>"]}},
+  "competitive_rivalry":  {{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>", "<factor>", "<factor>", "<factor>"]}},
+  "threat_of_substitutes":{{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>", "<factor>", "<factor>"]}},
+  "threat_of_new_entrants":{{"score": <1-10>, "rating": "High|Medium|Low", "factors": ["<factor>", "<factor>", "<factor>", "<factor>"]}},
   "summary": "<2 sentence overall market power assessment>"
 }}""")
 
 
-def generate_tco(category: str, spend_data: dict) -> dict:
+def generate_tco(category: str, spend_data: dict, icarus_signals: list = None,
+                 countries: list = None) -> dict:
+    signals_ctx = _signals_context(icarus_signals, category, countries, limit=3)
+    country_focus = f"\nGeographic focus: {', '.join(countries)}." if countries else ""
     return _call_claude(f"""Estimate the Total Cost of Ownership breakdown for "{category}" procurement.
 
-Spend context: {_spend_summary(spend_data)}
+Spend context: {_spend_summary(spend_data)}{country_focus}{signals_ctx}
+
+Where market intelligence signals are provided above, incorporate any cost-driver signals (price increases, tariffs, energy costs, labour market shifts) into the TCO notes and reduction levers.
 
 Return JSON (percentages must sum to 100):
 {{
@@ -293,18 +357,15 @@ Return JSON (percentages must sum to 100):
 }}""")
 
 
-def generate_levers(category: str, spend_data: dict, icarus_signals: list = None) -> dict:
-    signals_ctx = ""
-    if icarus_signals:
-        relevant = [s for s in icarus_signals if s.get("category") == category][:3]
-        if relevant:
-            signals_ctx = "\nMarket signals: " + " | ".join(
-                f"{s.get('headline', '')} → {s.get('action', '')}" for s in relevant
-            )
-
+def generate_levers(category: str, spend_data: dict, icarus_signals: list = None,
+                    countries: list = None) -> dict:
+    signals_ctx = _signals_context(icarus_signals, category, countries, limit=4)
+    country_focus = f"\nGeographic focus: {', '.join(countries)}." if countries else ""
     return _call_claude(f"""Generate concrete negotiation levers for "{category}" procurement.
 
-Spend context: {_spend_summary(spend_data)}{signals_ctx}
+Spend context: {_spend_summary(spend_data)}{country_focus}{signals_ctx}
+
+Where market intelligence signals are provided above, derive negotiation levers directly from current market conditions (e.g. a signal about supplier overcapacity → volume commitment lever; a pricing signal → benchmark-based renegotiation lever).
 
 Return JSON:
 {{
@@ -359,22 +420,24 @@ def generate_all_frameworks(
     category: str,
     icarus_signals: list = None,
     progress_cb=None,
+    countries: list = None,
 ) -> dict:
     """
     Run all 7 framework generators sequentially, save each to SQLite as it
     completes, and call progress_cb(framework_key, step_num, total) after each.
+    countries: optional list of ISO codes / regions to focus the analysis on.
     Returns {framework_key: {data, updated_at}}.
     """
     spend_data = get_category_spend_data(client_name, category)
     results = {}
 
     steps = [
-        ("kraljic", lambda: generate_kraljic(category, spend_data, icarus_signals)),
-        ("pestel",  lambda: generate_pestel(category, spend_data, icarus_signals)),
-        ("swot",    lambda: generate_swot(category, spend_data, icarus_signals)),
-        ("porter",  lambda: generate_porter(category, spend_data, icarus_signals)),
-        ("tco",     lambda: generate_tco(category, spend_data)),
-        ("levers",  lambda: generate_levers(category, spend_data, icarus_signals)),
+        ("kraljic", lambda: generate_kraljic(category, spend_data, icarus_signals, countries)),
+        ("pestel",  lambda: generate_pestel(category, spend_data, icarus_signals, countries)),
+        ("swot",    lambda: generate_swot(category, spend_data, icarus_signals, countries)),
+        ("porter",  lambda: generate_porter(category, spend_data, icarus_signals, countries)),
+        ("tco",     lambda: generate_tco(category, spend_data, icarus_signals, countries)),
+        ("levers",  lambda: generate_levers(category, spend_data, icarus_signals, countries)),
     ]
     total = len(steps) + 1  # +1 for recommendation
 

@@ -280,6 +280,22 @@ def init_database(client_name: str = "default") -> None:
     """)
 
     conn.commit()
+
+    # Add columns introduced in later versions — safe to run on existing databases
+    migrations = [
+        "ALTER TABLE transactions_raw ADD COLUMN spend_eur REAL",
+        "ALTER TABLE transactions_raw ADD COLUMN fx_rate REAL",
+        "ALTER TABLE vendors ADD COLUMN oc_country TEXT",
+        "ALTER TABLE vendors ADD COLUMN oc_registration_number TEXT",
+        "ALTER TABLE vendors ADD COLUMN oc_entity_type TEXT",
+        "ALTER TABLE vendors ADD COLUMN oc_jurisdiction TEXT",
+    ]
+    for sql in migrations:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    conn.commit()
     conn.close()
 
     print(f"  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches, supplier_profiles")
@@ -357,8 +373,8 @@ def insert_raw_transactions(conn: sqlite3.Connection, df: pd.DataFrame,
                     supplier, spend, currency, date, description,
                     cost_center, po_number, contract_id, contract_end,
                     gl_account, catalogue_id, region, category_source,
-                    source_type, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_type, raw_json, spend_eur, fx_rate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 upload_id, row_hash, now,
                 row_dict.get("supplier"), row_dict.get("spend"),
@@ -368,7 +384,8 @@ def insert_raw_transactions(conn: sqlite3.Connection, df: pd.DataFrame,
                 row_dict.get("contract_end"), row_dict.get("gl_account"),
                 row_dict.get("catalogue_id"), row_dict.get("region"),
                 row_dict.get("category") or row_dict.get("category_mapped"),
-                source_type, json.dumps(row_dict, default=str)
+                source_type, json.dumps(row_dict, default=str),
+                row_dict.get("spend_eur"), row_dict.get("fx_rate")
             ))
             inserted += 1
         except sqlite3.IntegrityError:
@@ -450,7 +467,9 @@ def upsert_vendor(conn: sqlite3.Connection, vendor_name: str,
                   is_company: bool = True, classification_source: str = "rule",
                   confidence: str = "medium", office_location: str = None,
                   claude_response: dict = None, manual_override: bool = False,
-                  override_notes: str = "") -> None:
+                  override_notes: str = "",
+                  oc_country: str = None, oc_registration_number: str = None,
+                  oc_entity_type: str = None, oc_jurisdiction: str = None) -> None:
     """
     Insert or update a vendor in the knowledge base.
 
@@ -482,12 +501,18 @@ def upsert_vendor(conn: sqlite3.Connection, vendor_name: str,
                     classification_source = ?,
                     classification_confidence = ?,
                     office_location = COALESCE(?, office_location),
-                    claude_response = COALESCE(?, claude_response)
+                    claude_response = COALESCE(?, claude_response),
+                    oc_country = COALESCE(?, oc_country),
+                    oc_registration_number = COALESCE(?, oc_registration_number),
+                    oc_entity_type = COALESCE(?, oc_entity_type),
+                    oc_jurisdiction = COALESCE(?, oc_jurisdiction)
                 WHERE vendor_name = ?
             """, (
                 now, category, int(is_freelancer), int(is_company),
                 classification_source, confidence, office_location,
                 json.dumps(claude_response) if claude_response else None,
+                oc_country or None, oc_registration_number or None,
+                oc_entity_type or None, oc_jurisdiction or None,
                 vendor_name
             ))
         else:
@@ -504,15 +529,18 @@ def upsert_vendor(conn: sqlite3.Connection, vendor_name: str,
                 category, is_freelancer, is_company,
                 classification_source, classification_confidence,
                 office_location, claude_response,
-                manual_override, override_notes
-            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                manual_override, override_notes,
+                oc_country, oc_registration_number, oc_entity_type, oc_jurisdiction
+            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             vendor_name, now, now,
             category, int(is_freelancer), int(is_company),
             classification_source, confidence,
             office_location,
             json.dumps(claude_response) if claude_response else None,
-            int(manual_override), override_notes
+            int(manual_override), override_notes,
+            oc_country or None, oc_registration_number or None,
+            oc_entity_type or None, oc_jurisdiction or None
         ))
 
     conn.commit()
@@ -547,7 +575,11 @@ def bulk_upsert_vendors(conn: sqlite3.Connection,
             classification_source="claude",
             confidence="high",
             office_location=location,
-            claude_response=result
+            claude_response=result,
+            oc_country=result.get("oc_country"),
+            oc_registration_number=result.get("oc_registration_number"),
+            oc_entity_type=result.get("oc_entity_type"),
+            oc_jurisdiction=result.get("oc_jurisdiction"),
         )
 
     print(f"  ✅ Vendor knowledge base updated")
@@ -562,7 +594,7 @@ def get_full_transaction_view(conn: sqlite3.Connection) -> pd.DataFrame:
     """
     query = """
         SELECT
-            r.id, r.supplier, r.spend, r.currency, r.date,
+            r.id, r.supplier, r.spend, r.spend_eur, r.fx_rate, r.currency, r.date,
             r.description, r.cost_center, r.po_number,
             r.contract_id, r.contract_end, r.region,
             r.category_source, r.source_type,
@@ -604,6 +636,73 @@ def get_maverick_transactions(conn: sqlite3.Connection) -> pd.DataFrame:
         ORDER BY r.spend DESC
     """
     return pd.read_sql_query(query, conn)
+
+
+def get_vendor_detail_map(conn: sqlite3.Connection) -> dict:
+    """
+    Return per-vendor transaction detail for Compliance Scorecard expand panels.
+    Dict keyed by vendor name, value has:
+      recent_txns  — list of last 5 transactions (date, amount, po_number, description, po_status)
+      monthly      — list of {month, amount} for last 6 months
+      po_breakdown — {with_po, no_po, unknown} counts
+      contracts    — sorted list of unique non-null contract IDs
+    """
+    try:
+        df = pd.read_sql_query("""
+            SELECT r.supplier,
+                   COALESCE(r.spend_eur, r.spend, 0) AS amount,
+                   r.date, r.description, r.po_number, r.contract_id,
+                   e.po_status, e.contract_status
+            FROM transactions_raw r
+            LEFT JOIN transactions_enriched e ON e.raw_id = r.id
+            WHERE r.supplier IS NOT NULL
+            ORDER BY r.supplier, r.date DESC
+        """, conn)
+    except Exception:
+        return {}
+
+    if df.empty:
+        return {}
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    cutoff = pd.Timestamp.now() - pd.DateOffset(months=6)
+    result = {}
+
+    for vendor, grp in df.groupby("supplier"):
+        # recent transactions (last 5, newest first)
+        recent = []
+        for _, r in grp.head(5).iterrows():
+            recent.append({
+                "date":        r["date"].strftime("%Y-%m-%d") if pd.notna(r["date"]) else "—",
+                "amount":      float(r["amount"] or 0),
+                "po_number":   str(r["po_number"] or "—"),
+                "description": str(r["description"] or "—")[:60],
+                "po_status":   str(r["po_status"] or "Unknown"),
+            })
+
+        # 6-month spend trend
+        recent6 = grp[grp["date"] >= cutoff].copy()
+        recent6["month"] = recent6["date"].dt.to_period("M")
+        monthly_raw = recent6.groupby("month")["amount"].sum().tail(6)
+        monthly = [{"month": str(m), "amount": float(a)} for m, a in monthly_raw.items()]
+
+        # PO breakdown
+        ps = grp["po_status"].fillna("Unknown")
+        with_po  = int((ps.str.contains("PO", case=False, na=False) & ~ps.str.contains("No PO", na=False)).sum())
+        no_po    = int(ps.str.contains("No PO", case=False, na=False).sum())
+        unknown  = int(ps.isin(["Unknown", ""]).sum())
+
+        # unique contract IDs
+        contracts = sorted({str(c) for c in grp["contract_id"].dropna() if str(c).strip() not in ("", "nan", "None")})
+
+        result[str(vendor)] = {
+            "recent_txns":  recent,
+            "monthly":      monthly,
+            "po_breakdown": {"with_po": with_po, "no_po": no_po, "unknown": unknown},
+            "contracts":    contracts,
+        }
+
+    return result
 
 
 def get_real_estate_by_location(conn: sqlite3.Connection) -> pd.DataFrame:

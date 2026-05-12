@@ -12,6 +12,20 @@ import icarus
 
 pn.extension("floatpanel", sizing_mode="stretch_width")
 
+
+def _fetch_hermes_signals() -> list[dict]:
+    """Pull latest signals from Hermes via Redis. Returns [] if Hermes is unavailable."""
+    try:
+        from modules.hermes_client import HermesClient
+        client = HermesClient()
+        items = client.get_procurement_briefing(limit=30)
+        if not items:
+            return []
+        return client.to_icarus_signals(items)
+    except Exception as exc:
+        print(f"[IcarusPanel] Hermes unavailable — falling back to RSS: {exc}")
+        return []
+
 # ── Colors aligned to SpendLens taxonomy ─────────────────────────────────────
 CAT_COLORS = {
     "Cloud & Compute":          "#378ADD",
@@ -146,6 +160,7 @@ _CSS = """
 .sig-action-label{font-weight:700;flex-shrink:0;}
 .sig-source{font-size:11px;color:#bbb;margin-top:4px;}
 .sig-source a{color:#888;text-decoration:underline;}
+.sig-pulled{font-size:11px;color:#aaa;margin-top:3px;}
 .sig-feedback{display:flex;gap:6px;margin-top:8px;align-items:center;}
 .sig-feedback-label{font-size:11px;color:#bbb;}
 .fb-btn{font-size:11px;padding:2px 9px;border-radius:99px;cursor:pointer;
@@ -302,6 +317,24 @@ _ENTER_KEY_HTML = """
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+_DAYS_MAP = {"Today": 1, "7 days": 7, "30 days": 30, "All time": None}
+
+
+def _fresh_badge(first_pulled_at: str) -> str:
+    """Return a green NEW pill if the signal was first stored by Icarus within the last 24 hours."""
+    if not first_pulled_at:
+        return ""
+    try:
+        dt = datetime.fromisoformat(first_pulled_at.replace("Z", "+00:00"))
+        if (datetime.now(timezone.utc) - dt).total_seconds() < 86400:
+            return ('<span style="font-size:9px;background:#0F6E56;color:#fff;'
+                    'border-radius:3px;padding:1px 5px;margin-right:4px;'
+                    'vertical-align:middle;font-weight:600;">NEW</span>')
+    except Exception:
+        pass
+    return ""
+
+
 def _fmt_date(ts: str) -> str:
     if not ts:
         return ""
@@ -416,6 +449,142 @@ def _build_rfp_html(data: dict, query: str) -> str:
 </div>"""
 
 
+def _build_intelligence_panel_html() -> str:
+    """
+    Collapsible panel showing data sources, processing pipeline, and country approach.
+    Reads live from icarus.RSS_SOURCES so it stays in sync with any changes.
+    """
+    import icarus as _ic
+
+    # Group RSS sources by their country tag
+    by_country: dict = {}
+    for src in _ic.RSS_SOURCES:
+        key = src.get("country", "Global")
+        by_country.setdefault(key, []).append(src["name"])
+
+    # Country order: Global first, then alphabetical
+    country_order = ["Global", "EU", "DE", "UK", "US", "FR"]
+    remaining = sorted(k for k in by_country if k not in country_order)
+    ordered_countries = [c for c in country_order if c in by_country] + remaining
+
+    country_labels = {
+        "Global": "Global",
+        "EU": "EU",
+        "DE": "Germany",
+        "UK": "UK",
+        "US": "US",
+        "FR": "France",
+    }
+
+    source_rows = ""
+    for country in ordered_countries:
+        names = by_country[country]
+        label = country_labels.get(country, country)
+        badges = "".join(
+            f'<span style="display:inline-block;background:#f0f4fa;border:1px solid #e0e8f0;'
+            f'border-radius:4px;padding:1px 6px;font-size:10px;color:#444;margin:1px 2px 1px 0;">'
+            f'{n}</span>'
+            for n in names
+        )
+        source_rows += (
+            f'<tr>'
+            f'<td style="white-space:nowrap;font-size:11px;font-weight:700;color:#1B2A4A;'
+            f'padding:4px 10px 4px 0;vertical-align:top;">{label}</td>'
+            f'<td style="font-size:11px;color:#555;padding:4px 0;">{badges}</td>'
+            f'</tr>'
+        )
+
+    grok_row = (
+        '<tr style="border-top:1px solid #f0f0f0;">'
+        '<td style="white-space:nowrap;font-size:11px;font-weight:700;color:#7A4A00;'
+        'padding:6px 10px 4px 0;vertical-align:top;">Grok Live</td>'
+        '<td style="font-size:11px;color:#7A4A00;padding:6px 0 4px;">'
+        'Real-time xAI web search — 4 topic clusters (Tech, People &amp; Services, '
+        'Facilities &amp; Travel, Procurement Strategy). Activated on Deep Scan only. '
+        'Surfaces breaking news and X posts that RSS feeds miss.'
+        '</td>'
+        '</tr>'
+    )
+
+    total_sources = len(_ic.RSS_SOURCES)
+
+    return f"""{_CSS}
+<details style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+               background:#fafcff;border-bottom:1px solid #f0f0f0;">
+  <summary style="cursor:pointer;padding:8px 18px;font-size:11px;font-weight:700;
+                  color:#1B2A4A;list-style:none;display:flex;align-items:center;gap:8px;
+                  user-select:none;">
+    <span style="color:#aaa;font-size:10px;">▶</span>
+    Intelligence Pipeline &mdash; {total_sources} RSS sources &plus; Grok live search
+    <span style="font-weight:400;color:#aaa;font-size:10px;margin-left:4px;">
+      click to expand
+    </span>
+  </summary>
+
+  <div style="padding:10px 18px 14px;display:flex;flex-direction:column;gap:12px;">
+
+    <!-- Pipeline flow -->
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="background:#EBF0FB;color:#1B2A4A;border-radius:6px;
+                   padding:3px 9px;font-size:11px;font-weight:700;">RSS Feeds</span>
+      <span style="color:#ccc;font-size:12px;">→</span>
+      <span style="background:#EBF0FB;color:#1B2A4A;border-radius:6px;
+                   padding:3px 9px;font-size:11px;font-weight:700;">Claude Haiku batches of 15</span>
+      <span style="color:#ccc;font-size:12px;">→</span>
+      <span style="background:#EBF0FB;color:#1B2A4A;border-radius:6px;
+                   padding:3px 9px;font-size:11px;font-weight:700;">Signal extraction</span>
+      <span style="color:#ccc;font-size:12px;">→</span>
+      <span style="background:#E1F5EE;color:#0F6E56;border-radius:6px;
+                   padding:3px 9px;font-size:11px;font-weight:700;">Country tagging</span>
+      <span style="color:#ccc;font-size:12px;">→</span>
+      <span style="background:#E1F5EE;color:#0F6E56;border-radius:6px;
+                   padding:3px 9px;font-size:11px;font-weight:700;">Icarus DB</span>
+      <span style="color:#ccc;font-size:12px;">→</span>
+      <span style="background:#E1F5EE;color:#0F6E56;border-radius:6px;
+                   padding:3px 9px;font-size:11px;font-weight:700;">Category Strategy frameworks</span>
+    </div>
+
+    <!-- Sources table -->
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;
+                  color:#aaa;margin-bottom:6px;">Sources by Region</div>
+      <table style="border-collapse:collapse;width:100%;">
+        {source_rows}
+        {grok_row}
+      </table>
+    </div>
+
+    <!-- Country approach -->
+    <div style="background:#f5f0ff;border:1px solid #e0d8f8;border-radius:8px;padding:10px 14px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;
+                  color:#6B4AB7;margin-bottom:5px;">Localized Intelligence</div>
+      <div style="font-size:11px;color:#444;line-height:1.6;">
+        Every signal is tagged with the countries and regions it affects (DE, EU, UK, US, FR&hellip;).
+        In <b>Category Strategy</b>, select a region before generating frameworks — signals are
+        pre-filtered so the analysis reflects local market conditions: pricing, regulation,
+        labour markets, and supplier landscapes where your company actually operates,
+        not just a generic global view.
+      </div>
+    </div>
+
+    <!-- Signal fields -->
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;
+                  color:#aaa;margin-bottom:5px;">Per-Signal Fields</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        {''.join(
+          f'<span style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:4px;'
+          f'padding:2px 7px;font-size:10px;color:#555;">{f}</span>'
+          for f in ["headline", "summary", "category", "relevance 1–10",
+                    "impact +/−/~", "action", "countries [ ]", "source", "published", "feedback"]
+        )}
+      </div>
+    </div>
+
+  </div>
+</details>"""
+
+
 def _build_result_placeholder_html() -> str:
     return f"""{_CSS}
 <div style="border:1.5px dashed #e4e8f0;border-radius:10px;padding:18px 20px;
@@ -518,27 +687,40 @@ def build_cat_tabs(signals, active_cat="all"):
 
 
 def build_signal_card(s, idx):
-    cat       = s.get("category", "")
-    impact    = s.get("impact", "neutral")
-    dot_color = IMPACT_COLOR.get(impact, "#888")
-    score     = s.get("relevance", 0)
-    headline  = s.get("headline", "")
-    summary   = s.get("summary", "")
-    action    = s.get("action", "")
-    source    = s.get("source", "")
-    url       = s.get("url") or "#"
-    sig_id    = s.get("id", idx)
-    date_str  = _fmt_date(s.get("published") or s.get("timestamp", ""))
+    cat             = s.get("category", "")
+    impact          = s.get("impact", "neutral")
+    dot_color       = IMPACT_COLOR.get(impact, "#888")
+    score           = s.get("relevance", 0)
+    headline        = s.get("headline", "")
+    summary         = s.get("summary", "")
+    action          = s.get("action", "")
+    source          = s.get("source", "")
+    url             = s.get("url") or "#"
+    sig_id          = s.get("id", idx)
+    first_pulled_at = s.get("first_pulled_at", "")
+    published       = s.get("published", "")
+    article_date    = _fmt_date(published or first_pulled_at)
+    pulled_date     = _fmt_date(first_pulled_at)
+    badge           = _fresh_badge(first_pulled_at)
+
+    # data-date for potential JS-side filtering: YYYY-MM-DD from published, else first_pulled_at
+    raw_date = published or first_pulled_at or ""
+    data_date = raw_date[:10] if len(raw_date) >= 10 else ""
+
+    pulled_row = (
+        f'<div class="sig-pulled">First seen by Icarus: <b>{pulled_date}</b></div>'
+        if pulled_date else ""
+    )
 
     return f"""
-<div class="signal-card" data-cat="{cat}" id="card-{idx}">
+<div class="signal-card" data-cat="{cat}" data-date="{data_date}" id="card-{idx}">
   <div class="signal-header" onclick="toggleCard({idx})">
     <div class="impact-dot" style="background:{dot_color}"></div>
-    <a class="signal-headline" href="{url}" target="_blank"
+    <span style="flex:1;min-width:0;">{badge}<a class="signal-headline" href="{url}" target="_blank"
        onclick="event.stopPropagation()" title="Open article"
-       style="color:#111;text-decoration:none;">{headline}</a>
+       style="color:#111;text-decoration:none;">{headline}</a></span>
     <div class="sig-meta">
-      <span class="sig-date">{date_str}</span>
+      <span class="sig-date">{article_date}</span>
       <span class="sig-score">{score}/10</span>
       <span class="sig-chevron" id="chev-{idx}">▼</span>
     </div>
@@ -547,6 +729,7 @@ def build_signal_card(s, idx):
     <div class="sig-summary">{summary}</div>
     <div class="sig-action"><span class="sig-action-label">Action:</span> {action}</div>
     <div class="sig-source"><a href="{url}" target="_blank">{source}</a></div>
+    {pulled_row}
     <div class="sig-feedback">
       <span class="sig-feedback-label">Relevant?</span>
       <button class="fb-btn" id="fb-yes-{idx}" onclick="icarusFeedback({sig_id},{idx},'relevant')">Yes</button>
@@ -598,7 +781,7 @@ def _build_cards_html(signals=None, loading=False):
         cnt  = len(cat_signals)
         cid  = _cat_id(cat)
 
-        dates = [s.get("published") or s.get("timestamp", "") for s in cat_signals]
+        dates = [s.get("published") or s.get("first_pulled_at", "") for s in cat_signals]
         latest_date = _fmt_date(max((d for d in dates if d), default=""))
 
         cards = ""
@@ -674,6 +857,27 @@ class IcarusPanel(param.Parameterized):
         )
         self._feedback_bridge.param.watch(self._on_feedback, "value")
 
+        _btn_ss = """
+            :host{margin:0;}
+            .bk-btn-group{display:flex;gap:4px;}
+            .bk-btn-group button{
+              height:22px;padding:0 10px;border-radius:99px;font-size:11px;font-weight:600;
+              border:1.5px solid #e0e0e0;background:#fafafa;color:#666;white-space:nowrap;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+              transition:all 0.15s;
+            }
+            .bk-btn-group button.bk-active{
+              background:#1B2A4A;border-color:#1B2A4A;color:white;
+            }
+        """
+        self._date_filter = pn.widgets.RadioButtonGroup(
+            options=list(_DAYS_MAP.keys()),
+            value="All time",
+            button_type="light",
+            stylesheets=[_btn_ss],
+        )
+        self._date_filter.param.watch(self._on_date_filter, "value")
+
 
         # In-memory document store — cleared automatically on every page refresh
         self._docs       = []   # list of {id, filename, text, char_count, uploaded_at}
@@ -719,7 +923,7 @@ class IcarusPanel(param.Parameterized):
         self._cards_pane.object  = _build_cards_html(self._signals, loading)
 
     def scan(self, mode="small"):
-        """Trigger RSS crawl. mode='small' (quick) or 'big' (deep + Grok)."""
+        """Trigger market scan. Tries Hermes first; falls back to internal RSS crawler."""
         if self._loading:
             return
         self._last_query = ""
@@ -729,12 +933,19 @@ class IcarusPanel(param.Parameterized):
         def _do():
             self._set_loading(True)
             try:
-                result = icarus.run(
-                    client_categories=self.client_categories,
-                    client_name=self.client_name,
-                    mode=mode,
-                )
-                self._signals = result.get("signals", [])
+                signals = _fetch_hermes_signals()
+                if signals:
+                    query_id = icarus.save_query(self.client_categories, 0, len(signals))
+                    icarus.save_signals(query_id, signals)
+                else:
+                    result = icarus.run(
+                        client_categories=self.client_categories,
+                        client_name=self.client_name,
+                        mode=mode,
+                    )
+                    signals = result.get("signals", [])
+
+                self._signals = signals
                 recent = icarus.get_recent_signals(limit=50)
                 id_map = {s["headline"]: s["id"] for s in recent}
                 for s in self._signals:
@@ -1001,8 +1212,12 @@ class IcarusPanel(param.Parameterized):
                 result.append(f"[{doc['filename']}]\n{excerpt}")
         return result
 
-    def load_recent(self):
-        self._signals    = icarus.get_recent_signals(limit=50)
+    def _on_date_filter(self, event):
+        days = _DAYS_MAP.get(event.new)
+        self.load_recent(days=days)
+
+    def load_recent(self, days=None):
+        self._signals    = icarus.get_recent_signals(limit=200, days=days)
         self._active_cat = "all"
         self._header_pane.object = _build_header_html(self._signals)
         self._cards_pane.object  = _build_cards_html(self._signals)
@@ -1123,6 +1338,11 @@ class IcarusPanel(param.Parameterized):
                     "border-bottom": "1px solid #f0f0f0", "gap": "8px"},
         )
 
+        intelligence_panel = pn.pane.HTML(
+            _build_intelligence_panel_html(),
+            sizing_mode="stretch_width",
+        )
+
         doc_section = pn.Column(
             pn.pane.HTML(
                 f'{_CSS}<div class="doc-section-title">📎 Documents'
@@ -1140,13 +1360,27 @@ class IcarusPanel(param.Parameterized):
 
         enter_key = pn.pane.HTML(_ENTER_KEY_HTML, height=0, margin=0)
 
+        date_filter_row = pn.Row(
+            pn.pane.HTML(
+                "<span style='font-size:11px;color:#aaa;"
+                "font-family:-apple-system,sans-serif;'>Show:</span>",
+                align="center",
+            ),
+            self._date_filter,
+            align="center",
+            styles={"padding": "6px 18px", "background": "#fafafa",
+                    "border-bottom": "1px solid #f0f0f0", "gap": "8px"},
+        )
+
         return pn.Column(
             self._js_pane,
             input_row,
             action_row,
+            intelligence_panel,
             doc_section,
             enter_key,
             self._result_pane,
+            date_filter_row,
             self._header_pane,
             self._cards_pane,
             self._feedback_bridge,

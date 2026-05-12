@@ -6,7 +6,66 @@ type fixing, vendor name standardization, currency conversion, etc.
 
 import pandas as pd
 import re
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime
+
+# Module-level cache so ECB is fetched once per process, not per upload
+_ecb_rates: dict | None = None
+
+
+def fetch_ecb_rates() -> dict:
+    """Fetch today's EUR reference rates from ECB. Returns {currency: rate} where 1 EUR = rate units."""
+    global _ecb_rates
+    if _ecb_rates is not None:
+        return _ecb_rates
+    url = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "SpendLens/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            xml_data = resp.read()
+        root = ET.fromstring(xml_data)
+        ns = {"ecb": "http://www.ecb.int/vocabulary/2002-08-01/eurofxref"}
+        rates = {"EUR": 1.0}
+        for cube in root.findall(".//ecb:Cube[@currency]", ns):
+            rates[cube.attrib["currency"]] = float(cube.attrib["rate"])
+        _ecb_rates = rates
+        print(f"  💱 ECB rates loaded: {len(rates)} currencies")
+        return rates
+    except Exception as e:
+        print(f"  ⚠ ECB fetch failed ({e}) — non-EUR spend will not be converted")
+        return {}
+
+
+def convert_to_eur(df: pd.DataFrame,
+                   spend_col: str = "spend",
+                   currency_col: str = "currency") -> pd.DataFrame:
+    """Add spend_eur and fx_rate columns. Non-EUR rows are converted; EUR rows pass through unchanged."""
+    if spend_col not in df.columns:
+        return df
+    df = df.copy()
+    rates = fetch_ecb_rates()
+
+    def _convert(row):
+        amount = row[spend_col]
+        if pd.isna(amount):
+            return None, None
+        curr = str(row.get(currency_col) or "EUR").strip().upper() if currency_col in df.columns else "EUR"
+        if curr == "EUR" or not rates:
+            return amount, 1.0
+        rate = rates.get(curr)
+        if rate:
+            return round(amount / rate, 2), rate
+        return amount, 1.0  # unknown currency — keep raw, rate=1 signals no conversion
+
+    converted = df.apply(_convert, axis=1, result_type="expand")
+    df["spend_eur"] = converted[0]
+    df["fx_rate"] = converted[1]
+
+    non_eur = ((df.get(currency_col, "EUR") if currency_col in df.columns else "EUR") != "EUR").sum() if currency_col in df.columns else 0
+    if non_eur:
+        print(f"  💱 Converted {non_eur} non-EUR rows to EUR")
+    return df
 
 
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
@@ -203,6 +262,13 @@ def full_cleanup(df: pd.DataFrame, spend_col: str = None, date_col: str = None,
         if col in df.columns:
             df[col] = fix_spend_column(df[col])
             report[f"{col}_fixed"] = True
+
+    # 3b. FX conversion: add spend_eur + fx_rate columns
+    active_spend = spend_col or next((c for c in spend_candidates if c in df.columns), None)
+    currency_col = next((c for c in df.columns if any(k in c for k in ["currency", "währung", "wahrung"])), "currency")
+    if active_spend:
+        df = convert_to_eur(df, spend_col=active_spend, currency_col=currency_col)
+        report["fx_conversion"] = True
 
     # 4. Fix dates
     date_candidates = [date_col] if date_col else [

@@ -2753,6 +2753,23 @@ template = pn.template.FastListTemplate(
         .title-bar > span:not(.title) {
             display: none !important;
         }
+
+        /* Active tab frame */
+        .bk-tab {
+            border: 2px solid transparent;
+            border-radius: 5px 5px 0 0;
+            padding: 6px 14px;
+            transition: border-color 0.15s ease;
+        }
+        .bk-tab.bk-active {
+            border-color: #1B3A6B !important;
+            background-color: rgba(27, 58, 107, 0.06) !important;
+            font-weight: 600;
+            color: #1B3A6B !important;
+        }
+        .bk-tab:not(.bk-active):hover {
+            border-color: rgba(27, 58, 107, 0.25) !important;
+        }
     """],
 )
 

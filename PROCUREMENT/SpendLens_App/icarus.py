@@ -10,11 +10,33 @@ import json
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ── Hermes integration (optional — silently disabled if Redis not configured) ──
+def _get_hermes_signals(client_categories: list) -> list[dict]:
+    """
+    Fetch pre-classified procurement signals from Hermes via shared Redis.
+    Returns signals in Icarus format, ready for dedup + save pipeline.
+    Silently returns [] if UPSTASH credentials are missing or Hermes has no data.
+    """
+    if not os.environ.get("UPSTASH_REDIS_REST_URL"):
+        return []
+    try:
+        from modules.hermes_client import HermesClient
+        hermes = HermesClient()
+        items = hermes.get_procurement_briefing(limit=25)
+        signals = hermes.to_icarus_signals(items)
+        if signals:
+            print(f"[Icarus] Hermes: {len(signals)} procurement signals injected")
+        return signals
+    except Exception as e:
+        print(f"[Icarus] Hermes unavailable: {e}")
+        return []
+
 
 # ── JSON helper ───────────────────────────────────────────────────────────────
 
@@ -81,30 +103,35 @@ RSS_SOURCES = [
         "url": "https://feeds.reuters.com/reuters/businessNews",
         "categories": ["Cloud & Compute", "Hardware & Equipment", "Facilities & Office",
                        "Professional Services", "Recruitment & HR", "Marketing & Campaigns"],
+        "country": "Global",
     },
     {
         "name": "Reuters Technology",
         "url": "https://feeds.reuters.com/reuters/technologyNews",
         "categories": ["Cloud & Compute", "Hardware & Equipment", "IT Software & SaaS",
                        "AI/ML APIs & Data", "Telecom & Voice"],
+        "country": "Global",
     },
     {
         "name": "The Register",
         "url": "https://www.theregister.com/headlines.atom",
         "categories": ["Cloud & Compute", "Hardware & Equipment", "IT Software & SaaS",
                        "AI/ML APIs & Data", "Telecom & Voice"],
+        "country": "UK",
     },
     {
         "name": "Ars Technica",
         "url": "https://feeds.arstechnica.com/arstechnica/index",
         "categories": ["Cloud & Compute", "AI/ML APIs & Data", "IT Software & SaaS",
                        "Hardware & Equipment"],
+        "country": "US",
     },
     {
         "name": "ZDNet",
         "url": "https://www.zdnet.com/news/rss.xml",
         "categories": ["Cloud & Compute", "IT Software & SaaS", "AI/ML APIs & Data",
                        "Telecom & Voice", "Hardware & Equipment"],
+        "country": "US",
     },
     # ── Procurement & supply chain ────────────────────────────────────────────
     {
@@ -112,18 +139,21 @@ RSS_SOURCES = [
         "url": "https://spendmatters.com/feed/",
         "categories": ["Professional Services", "IT Software & SaaS", "Recruitment & HR",
                        "Marketing & Campaigns"],
+        "country": "Global",
     },
     {
         "name": "Supply Chain Dive",
         "url": "https://www.supplychaindive.com/feeds/news/",
         "categories": ["Hardware & Equipment", "Facilities & Office", "Professional Services",
                        "Cloud & Compute", "Recruitment & HR"],
+        "country": "US",
     },
     {
         "name": "Supply Chain Brain",
         "url": "https://www.supplychainbrain.com/rss/allnews.aspx",
         "categories": ["Hardware & Equipment", "Facilities & Office", "Professional Services",
                        "Travel & Expenses"],
+        "country": "Global",
     },
     {
         "name": "CPO Rising (Ardent Partners)",
@@ -131,6 +161,7 @@ RSS_SOURCES = [
         "categories": ["Professional Services", "IT Software & SaaS", "Recruitment & HR",
                        "Cloud & Compute", "Marketing & Campaigns", "Hardware & Equipment",
                        "Facilities & Office", "Travel & Expenses"],
+        "country": "Global",
     },
     # ── European & German business ────────────────────────────────────────────
     {
@@ -138,41 +169,109 @@ RSS_SOURCES = [
         "url": "https://www.handelsblatt.com/contentexport/feed/top-themen",
         "categories": ["Facilities & Office", "Professional Services", "Real Estate",
                        "Recruitment & HR", "Travel & Expenses"],
+        "country": "DE",
     },
     {
         "name": "WirtschaftsWoche",
         "url": "https://www.wiwo.de/rss/feed/",
         "categories": ["Professional Services", "Real Estate", "Recruitment & HR",
                        "Facilities & Office", "Travel & Expenses"],
+        "country": "DE",
+    },
+    {
+        "name": "FAZ Wirtschaft",
+        "url": "https://www.faz.net/rss/aktuell/wirtschaft/",
+        "categories": ["Professional Services", "Real Estate", "Recruitment & HR",
+                       "Facilities & Office", "Cloud & Compute"],
+        "country": "DE",
     },
     {
         "name": "Euractiv",
         "url": "https://www.euractiv.com/feed/",
-        "categories": ["Facilities & Office", "Professional Services", "Real Estate", "Travel & Expenses"],
+        "categories": ["Facilities & Office", "Professional Services", "Real Estate",
+                       "Travel & Expenses", "Cloud & Compute", "IT Software & SaaS"],
+        "country": "EU",
+    },
+    {
+        "name": "Politico Europe",
+        "url": "https://www.politico.eu/feed/",
+        "categories": ["Professional Services", "Facilities & Office", "Real Estate",
+                       "Cloud & Compute", "IT Software & SaaS", "Recruitment & HR"],
+        "country": "EU",
+    },
+    # ── UK ────────────────────────────────────────────────────────────────────
+    {
+        "name": "BBC Business",
+        "url": "https://feeds.bbci.co.uk/news/business/rss.xml",
+        "categories": ["Professional Services", "Real Estate", "Recruitment & HR",
+                       "Facilities & Office", "Travel & Expenses", "Cloud & Compute"],
+        "country": "UK",
+    },
+    {
+        "name": "The Guardian Business",
+        "url": "https://www.theguardian.com/uk/business/rss",
+        "categories": ["Professional Services", "Real Estate", "Recruitment & HR",
+                       "Facilities & Office", "Travel & Expenses"],
+        "country": "UK",
+    },
+    # ── US & Global economy ───────────────────────────────────────────────────
+    {
+        "name": "AP Business",
+        "url": "https://feeds.apnews.com/apf-business",
+        "categories": ["Cloud & Compute", "Hardware & Equipment", "IT Software & SaaS",
+                       "Professional Services", "Recruitment & HR", "Facilities & Office"],
+        "country": "US",
+    },
+    {
+        "name": "CNBC Business",
+        "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html",
+        "categories": ["Cloud & Compute", "AI/ML APIs & Data", "IT Software & SaaS",
+                       "Hardware & Equipment", "Professional Services", "Recruitment & HR"],
+        "country": "US",
+    },
+    # ── France ────────────────────────────────────────────────────────────────
+    {
+        "name": "Les Echos",
+        "url": "https://syndication.lesechos.fr/rss/rss_la_une.xml",
+        "categories": ["Professional Services", "Real Estate", "Recruitment & HR",
+                       "Facilities & Office", "Travel & Expenses"],
+        "country": "FR",
+    },
+    # ── International institutions ────────────────────────────────────────────
+    {
+        "name": "IMF News",
+        "url": "https://www.imf.org/en/News/rss?language=eng",
+        "categories": ["Professional Services", "Facilities & Office", "Real Estate",
+                       "Travel & Expenses", "Hardware & Equipment"],
+        "country": "Global",
     },
     # ── Infrastructure & data centres ─────────────────────────────────────────
     {
         "name": "DatacenterDynamics",
         "url": "https://www.datacenterdynamics.com/en/rss/",
         "categories": ["Cloud & Compute", "Facilities & Office", "Hardware & Equipment"],
+        "country": "Global",
     },
     # ── Commodity & energy pricing ────────────────────────────────────────────
     {
         "name": "OilPrice",
         "url": "https://oilprice.com/rss/main",
         "categories": ["Facilities & Office", "Travel & Expenses", "Hardware & Equipment"],
+        "country": "Global",
     },
     # ── HR & freelancer markets ───────────────────────────────────────────────
     {
         "name": "FreelancerMap",
         "url": "https://www.freelancermap.de/blog/feed/",
         "categories": ["Recruitment & HR"],
+        "country": "DE",
     },
     # ── Travel ────────────────────────────────────────────────────────────────
     {
         "name": "Business Travel News",
         "url": "https://www.businesstravelnews.com/rss",
         "categories": ["Travel & Expenses"],
+        "country": "Global",
     },
 ]
 
@@ -208,15 +307,16 @@ def init_db():
             impact      TEXT NOT NULL,       -- 'positive' | 'negative' | 'neutral'
             action      TEXT,                -- suggested procurement action
             url         TEXT,
-            feedback    TEXT                 -- 'relevant' | 'not_relevant' | NULL
+            feedback    TEXT,                -- 'relevant' | 'not_relevant' | NULL
+            countries   TEXT                 -- JSON array of ISO country codes / regions
         )
     """)
-    # migration: add published column if DB already exists without it
-    try:
-        c.execute("ALTER TABLE signals ADD COLUMN published TEXT")
-        conn.commit()
-    except Exception:
-        pass
+    for col in ("published TEXT", "countries TEXT"):
+        try:
+            c.execute(f"ALTER TABLE signals ADD COLUMN {col}")
+            conn.commit()
+        except Exception:
+            pass
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS category_weights (
@@ -245,31 +345,34 @@ def save_query(categories, article_count, signal_count):
 
 
 def save_signals(query_id, signals):
-    """Persist signals from a query run, skipping any URL already stored today."""
+    """Persist signals, skipping any article already stored (by URL, or headline if no URL)."""
     conn = sqlite3.connect(ICARUS_DB)
     c = conn.cursor()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for s in signals:
-        url = s.get("url") or ""
+        url = (s.get("url") or "").strip()
+        headline = (s.get("headline") or "").strip()
         if url:
-            c.execute(
-                "SELECT 1 FROM signals WHERE url = ? AND timestamp LIKE ? LIMIT 1",
-                (url, f"{today}%"),
-            )
+            c.execute("SELECT 1 FROM signals WHERE url = ? LIMIT 1", (url,))
             if c.fetchone():
-                continue  # already stored today — skip
+                continue  # URL already in DB — skip regardless of age
+        elif headline:
+            c.execute("SELECT 1 FROM signals WHERE headline = ? LIMIT 1", (headline,))
+            if c.fetchone():
+                continue  # same headline already stored — skip
+        countries_raw = s.get("countries", [])
+        countries_json = json.dumps(countries_raw) if isinstance(countries_raw, list) else countries_raw
         c.execute("""
             INSERT INTO signals
             (query_id, timestamp, published, source, headline, summary,
-             category, relevance, impact, action, url)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+             category, relevance, impact, action, url, countries)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             query_id,
             datetime.now(timezone.utc).isoformat(),
             s.get("published"),
             s.get("source"), s.get("headline"), s.get("summary"),
             s.get("category"), s.get("relevance"), s.get("impact"),
-            s.get("action"), s.get("url")
+            s.get("action"), s.get("url"), countries_json
         ))
     conn.commit()
     conn.close()
@@ -316,23 +419,56 @@ def get_category_weights():
     return weights
 
 
-def get_recent_signals(limit=20):
-    """Fetch most recent signals from memory for dashboard display."""
-    init_db()  # ensures published column exists
+def get_recent_signals(limit=200, days=None, countries=None):
+    """
+    Fetch signals from DB.  days=None → all time; days=1 → today; days=7 → last week.
+    countries: optional list of ISO codes / region names to filter by (e.g. ["DE", "EU"]).
+    Filters by article publish date when available, falls back to when Icarus stored it.
+    Returns 'first_pulled_at' (= DB timestamp) so the UI can distinguish new vs archived signals.
+    """
+    init_db()
     conn = sqlite3.connect(ICARUS_DB)
     c = conn.cursor()
-    c.execute("""
-        SELECT id, timestamp, published, source, headline, summary, category,
-               relevance, impact, action, url, feedback
-        FROM signals
-        ORDER BY timestamp DESC
-        LIMIT ?
-    """, (limit,))
-    cols = ["id","timestamp","published","source","headline","summary","category",
-            "relevance","impact","action","url","feedback"]
+    date_expr = "COALESCE(NULLIF(published,''), timestamp)"
+    if days is not None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        c.execute(f"""
+            SELECT id, timestamp, published, source, headline, summary, category,
+                   relevance, impact, action, url, feedback, countries
+            FROM signals
+            WHERE {date_expr} >= ?
+            ORDER BY {date_expr} DESC
+            LIMIT ?
+        """, (cutoff, limit))
+    else:
+        c.execute(f"""
+            SELECT id, timestamp, published, source, headline, summary, category,
+                   relevance, impact, action, url, feedback, countries
+            FROM signals
+            ORDER BY {date_expr} DESC
+            LIMIT ?
+        """, (limit,))
+    # Map timestamp → first_pulled_at so callers know this is "when Icarus first stored it"
+    cols = ["id", "first_pulled_at", "published", "source", "headline", "summary",
+            "category", "relevance", "impact", "action", "url", "feedback", "countries"]
     rows = [dict(zip(cols, row)) for row in c.fetchall()]
     conn.close()
-    # Dedup in-Python so stale DB duplicates never reach the UI
+
+    # Parse countries JSON and apply country filter
+    for row in rows:
+        raw = row.get("countries") or "[]"
+        try:
+            row["countries"] = json.loads(raw) if isinstance(raw, str) else (raw or [])
+        except Exception:
+            row["countries"] = []
+
+    if countries:
+        filter_set = {c.upper() for c in countries}
+        rows = [
+            r for r in rows
+            if not r["countries"]  # keep untagged signals (older data)
+            or filter_set.intersection(c2.upper() for c2 in r["countries"])
+        ]
     seen_urls: set = set()
     seen_heads: set = set()
     unique: list = []
@@ -561,6 +697,7 @@ def fetch_articles(client_categories, mode="small"):
                     "url": entry.get("link", ""),
                     "relevant_categories": list(relevant),
                     "published": pub_str,
+                    "feed_country": feed_cfg.get("country", "Global"),
                 })
             return results
         except Exception as e:
@@ -614,7 +751,8 @@ def _analyze_batch(batch, client_categories, client_name):
     articles_text = "\n\n".join(
         f"SOURCE: {a['source']}\nDATE: {a.get('published','')[:10]}\n"
         f"HEADLINE: {a['headline']}\nSUMMARY: {a['summary']}\n"
-        f"URL: {a['url']}\nCATEGORIES: {', '.join(a['relevant_categories'])}"
+        f"URL: {a['url']}\nCATEGORIES: {', '.join(a['relevant_categories'])}\n"
+        f"FEED_COUNTRY_HINT: {a.get('feed_country', 'Global')}"
         for a in batch
     )
     prompt = (
@@ -626,7 +764,10 @@ def _analyze_batch(batch, client_categories, client_name):
         '"source", "headline", "summary" (2-3 sentences on procurement impact), '
         '"category" (from client list), "relevance" (1-10 int), '
         '"impact" ("positive"|"negative"|"neutral"), "action" (one concrete action), '
-        '"url", "published" (YYYY-MM-DD)\n\n'
+        '"url", "published" (YYYY-MM-DD), '
+        '"countries" (JSON array of affected country/region codes — use ISO 2-letter codes '
+        'like "DE", "US", "UK", "FR", "NL", "EU" for European Union, "Global" for worldwide; '
+        'include all affected; e.g. ["DE", "EU"] or ["US", "Global"])\n\n'
         f"Articles:\n{articles_text}"
     )
     try:
@@ -708,6 +849,16 @@ def query_with_claude(query: str, client_categories: list, client_name: str = "C
         for i, doc in enumerate(doc_context, 1):
             doc_section += f"\n--- Document {i} ---\n{doc}\n"
 
+    # Hermes real-time supplier intelligence
+    hermes_section = ""
+    hermes_signals = _get_hermes_signals(client_categories)
+    if hermes_signals:
+        hermes_section = "\n\nHermes external market intelligence (real-time supplier signals):\n"
+        hermes_section += "\n".join(
+            f"- [{s['impact'].upper()}] {s['source']}: {s['headline'][:80]} → {s['action'][:80]}"
+            for s in hermes_signals[:8]
+        )
+
     prompt = (
         f"You are Icarus, a procurement intelligence agent for SpendLens.\n\n"
         f"Client: {client_name}\n"
@@ -715,7 +866,8 @@ def query_with_claude(query: str, client_categories: list, client_name: str = "C
         f"User question: {query}\n"
         f"{doc_section}\n"
         f"Stored signals (context):\n{ctx}\n\n"
-        f"Recent headlines:\n{art_text}\n\n"
+        f"Recent headlines:\n{art_text}\n"
+        f"{hermes_section}\n\n"
         "Answer the question in 3-5 sentences with concrete recommendations for the procurement team. "
         "Where documents are provided, reference specific clauses or figures. "
         "Then return the 3-5 most relevant signals.\n\n"
@@ -952,6 +1104,11 @@ def run(client_categories=None, client_name="Client", mode="small"):
 
     # 2. Analyze with Claude
     signals = analyze_with_claude(articles, client_categories, client_name)
+
+    # 2.5 Inject Hermes signals (pre-classified, bypass Claude analysis)
+    hermes_signals = _get_hermes_signals(client_categories)
+    signals = hermes_signals + signals
+
     # Deduplicate by URL first (canonical), then by normalised headline as fallback.
     # Claude sometimes rephrases headlines slightly, so headline-only dedup misses dupes.
     seen_urls: set = set()

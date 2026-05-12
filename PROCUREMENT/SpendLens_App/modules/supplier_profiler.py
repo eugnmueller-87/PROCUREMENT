@@ -32,32 +32,32 @@ RELATIONSHIP_OPTIONS = ["Strategic", "Preferred", "Approved", "Transactional"]
 
 # ── Demo supplier master (used when no real data is uploaded) ─────────────────
 _DEMO_SUPPLIERS = [
-    {"vendor_name": "AWS",              "category": "Cloud & Compute",       "total_spend": 18000, "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 95},
-    {"vendor_name": "WeWork GmbH",      "category": "Real Estate",           "total_spend": 3200,  "contract_status": "Under Contract", "contract_end": "2028-12-31", "risk_level": "Low",      "single_source": True,  "po_coverage_pct": 100},
-    {"vendor_name": "Google Cloud",     "category": "Cloud & Compute",       "total_spend": 3200,  "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 90},
-    {"vendor_name": "OpenAI",           "category": "AI/ML APIs & Data",     "total_spend": 2800,  "contract_status": "Under Contract", "contract_end": "2026-06-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 80},
-    {"vendor_name": "Google Ads",       "category": "Marketing & Campaigns", "total_spend": 2200,  "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 45},
-    {"vendor_name": "Twilio",           "category": "Telecom & Voice",       "total_spend": 2200,  "contract_status": "Under Contract", "contract_end": "2026-07-31", "risk_level": "Critical", "single_source": True,  "po_coverage_pct": 92},
-    {"vendor_name": "Meta Ads",         "category": "Marketing & Campaigns", "total_spend": 1800,  "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 40},
-    {"vendor_name": "ISS Deutschland",  "category": "Facilities & Office",   "total_spend": 1800,  "contract_status": "Under Contract", "contract_end": "2028-06-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 70},
-    {"vendor_name": "Azure",            "category": "Cloud & Compute",       "total_spend": 1800,  "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 88},
-    {"vendor_name": "Hays",             "category": "Recruitment & HR",      "total_spend": 1500,  "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 60},
-    {"vendor_name": "Anthropic",        "category": "AI/ML APIs & Data",     "total_spend": 1400,  "contract_status": "Under Contract", "contract_end": "2026-06-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 75},
-    {"vendor_name": "Lufthansa",        "category": "Travel & Expenses",     "total_spend": 1200,  "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 40},
-    {"vendor_name": "LinkedIn",         "category": "Recruitment & HR",      "total_spend": 1200,  "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 55},
-    {"vendor_name": "Deloitte",         "category": "Professional Services", "total_spend": 1200,  "contract_status": "Expired",        "contract_end": "2026-03-31", "risk_level": "Critical", "single_source": False, "po_coverage_pct": 55},
-    {"vendor_name": "Hetzner",          "category": "Cloud & Compute",       "total_spend": 1000,  "contract_status": "Under Contract", "contract_end": "2027-03-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 85},
-    {"vendor_name": "Dell",             "category": "Hardware & Equipment",  "total_spend": 900,   "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Low",      "single_source": False, "po_coverage_pct": 90},
-    {"vendor_name": "Navan",            "category": "Travel & Expenses",     "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 45},
-    {"vendor_name": "Personio",         "category": "Recruitment & HR",      "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 70},
-    {"vendor_name": "Baker McKenzie",   "category": "Professional Services", "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 60},
-    {"vendor_name": "Apple",            "category": "Hardware & Equipment",  "total_spend": 800,   "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Low",      "single_source": False, "po_coverage_pct": 85},
-    {"vendor_name": "Deutsche Telekom", "category": "Telecom & Voice",       "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2027-06-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 85},
-    {"vendor_name": "GitHub",           "category": "IT Software & SaaS",    "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 90},
-    {"vendor_name": "Datadog",          "category": "IT Software & SaaS",    "total_spend": 600,   "contract_status": "Under Contract", "contract_end": "2027-01-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 85},
-    {"vendor_name": "Atlassian",        "category": "IT Software & SaaS",    "total_spend": 600,   "contract_status": "Under Contract", "contract_end": "2027-03-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 88},
-    {"vendor_name": "Lyreco",           "category": "Facilities & Office",   "total_spend": 600,   "contract_status": "Under Contract", "contract_end": "2027-06-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 75},
-    {"vendor_name": "BCD Travel",       "category": "Travel & Expenses",     "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 40},
+    {"vendor_name": "AWS",              "category": "Cloud & Compute",       "country": "USA",         "total_spend": 18000, "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 95},
+    {"vendor_name": "WeWork GmbH",      "category": "Real Estate",           "country": "Germany",     "total_spend": 3200,  "contract_status": "Under Contract", "contract_end": "2028-12-31", "risk_level": "Low",      "single_source": True,  "po_coverage_pct": 100},
+    {"vendor_name": "Google Cloud",     "category": "Cloud & Compute",       "country": "USA",         "total_spend": 3200,  "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 90},
+    {"vendor_name": "OpenAI",           "category": "AI/ML APIs & Data",     "country": "USA",         "total_spend": 2800,  "contract_status": "Under Contract", "contract_end": "2026-06-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 80},
+    {"vendor_name": "Google Ads",       "category": "Marketing & Campaigns", "country": "USA",         "total_spend": 2200,  "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 45},
+    {"vendor_name": "Twilio",           "category": "Telecom & Voice",       "country": "USA",         "total_spend": 2200,  "contract_status": "Under Contract", "contract_end": "2026-07-31", "risk_level": "Critical", "single_source": True,  "po_coverage_pct": 92},
+    {"vendor_name": "Meta Ads",         "category": "Marketing & Campaigns", "country": "USA",         "total_spend": 1800,  "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 40},
+    {"vendor_name": "ISS Deutschland",  "category": "Facilities & Office",   "country": "Germany",     "total_spend": 1800,  "contract_status": "Under Contract", "contract_end": "2028-06-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 70},
+    {"vendor_name": "Azure",            "category": "Cloud & Compute",       "country": "USA",         "total_spend": 1800,  "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 88},
+    {"vendor_name": "Hays",             "category": "Recruitment & HR",      "country": "UK",          "total_spend": 1500,  "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 60},
+    {"vendor_name": "Anthropic",        "category": "AI/ML APIs & Data",     "country": "USA",         "total_spend": 1400,  "contract_status": "Under Contract", "contract_end": "2026-06-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 75},
+    {"vendor_name": "Lufthansa",        "category": "Travel & Expenses",     "country": "Germany",     "total_spend": 1200,  "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 40},
+    {"vendor_name": "LinkedIn",         "category": "Recruitment & HR",      "country": "USA",         "total_spend": 1200,  "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 55},
+    {"vendor_name": "Deloitte",         "category": "Professional Services", "country": "USA",         "total_spend": 1200,  "contract_status": "Expired",        "contract_end": "2026-03-31", "risk_level": "Critical", "single_source": False, "po_coverage_pct": 55},
+    {"vendor_name": "Hetzner",          "category": "Cloud & Compute",       "country": "Germany",     "total_spend": 1000,  "contract_status": "Under Contract", "contract_end": "2027-03-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 85},
+    {"vendor_name": "Dell",             "category": "Hardware & Equipment",  "country": "USA",         "total_spend": 900,   "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Low",      "single_source": False, "po_coverage_pct": 90},
+    {"vendor_name": "Navan",            "category": "Travel & Expenses",     "country": "USA",         "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 45},
+    {"vendor_name": "Personio",         "category": "Recruitment & HR",      "country": "Germany",     "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 70},
+    {"vendor_name": "Baker McKenzie",   "category": "Professional Services", "country": "USA",         "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 60},
+    {"vendor_name": "Apple",            "category": "Hardware & Equipment",  "country": "USA",         "total_spend": 800,   "contract_status": "No Contract",    "contract_end": "N/A",        "risk_level": "Low",      "single_source": False, "po_coverage_pct": 85},
+    {"vendor_name": "Deutsche Telekom", "category": "Telecom & Voice",       "country": "Germany",     "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2027-06-30", "risk_level": "High",     "single_source": False, "po_coverage_pct": 85},
+    {"vendor_name": "GitHub",           "category": "IT Software & SaaS",    "country": "USA",         "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-12-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 90},
+    {"vendor_name": "Datadog",          "category": "IT Software & SaaS",    "country": "USA",         "total_spend": 600,   "contract_status": "Under Contract", "contract_end": "2027-01-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 85},
+    {"vendor_name": "Atlassian",        "category": "IT Software & SaaS",    "country": "Australia",   "total_spend": 600,   "contract_status": "Under Contract", "contract_end": "2027-03-31", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 88},
+    {"vendor_name": "Lyreco",           "category": "Facilities & Office",   "country": "France",      "total_spend": 600,   "contract_status": "Under Contract", "contract_end": "2027-06-30", "risk_level": "Low",      "single_source": False, "po_coverage_pct": 75},
+    {"vendor_name": "BCD Travel",       "category": "Travel & Expenses",     "country": "Netherlands", "total_spend": 800,   "contract_status": "Under Contract", "contract_end": "2026-09-30", "risk_level": "Medium",   "single_source": False, "po_coverage_pct": 40},
 ]
 
 
@@ -146,12 +146,14 @@ def init_supplier_profiles(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sp_client ON supplier_profiles(client_name)"
     )
-    try:
-        conn.execute(
-            "ALTER TABLE supplier_profiles ADD COLUMN previous_compliance_score REAL DEFAULT 0"
-        )
-    except Exception:
-        pass  # column already exists on existing databases
+    for _col_sql in [
+        "ALTER TABLE supplier_profiles ADD COLUMN previous_compliance_score REAL DEFAULT 0",
+        "ALTER TABLE supplier_profiles ADD COLUMN country TEXT",
+    ]:
+        try:
+            conn.execute(_col_sql)
+        except Exception:
+            pass  # column already exists
     conn.commit()
 
 
@@ -173,13 +175,14 @@ def upsert_supplier_profile(conn: sqlite3.Connection, client_name: str,
 
     conn.execute("""
         INSERT INTO supplier_profiles
-            (client_name, vendor_name, category, tier, tier_computed, tier_override,
+            (client_name, vendor_name, category, country, tier, tier_computed, tier_override,
              relationship_status, total_spend, po_coverage_pct, contract_status,
              contract_end, risk_level, single_source, compliance_score,
              previous_compliance_score, last_updated)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(client_name, vendor_name) DO UPDATE SET
             category=excluded.category,
+            country=COALESCE(excluded.country, country),
             tier=excluded.tier,
             tier_computed=excluded.tier_computed,
             tier_override=COALESCE(tier_override, excluded.tier_override),
@@ -197,6 +200,7 @@ def upsert_supplier_profile(conn: sqlite3.Connection, client_name: str,
         client_name,
         record["vendor_name"],
         record.get("category"),
+        record.get("country") or None,
         record.get("tier"),
         record.get("tier_computed"),
         override,
@@ -288,7 +292,7 @@ def get_supplier_profiles(conn: sqlite3.Connection,
     init_supplier_profiles(conn)
     try:
         df = pd.read_sql_query("""
-            SELECT vendor_name, category, tier, relationship_status,
+            SELECT vendor_name, category, country, tier, relationship_status,
                    total_spend, po_coverage_pct, contract_status,
                    contract_end, risk_level, single_source, compliance_score,
                    previous_compliance_score
@@ -322,6 +326,7 @@ def build_demo_profiles() -> pd.DataFrame:
         rows.append({
             "vendor_name":              r["vendor_name"],
             "category":                 r["category"],
+            "country":                  r.get("country", ""),
             "tier":                     tier,
             "relationship_status":      suggest_relationship_status(
                 tier, r["risk_level"], r["contract_status"], r["single_source"]

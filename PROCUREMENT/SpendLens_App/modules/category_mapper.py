@@ -28,6 +28,9 @@ This keeps API costs low: 1 call instead of 1000, and $0 on reruns.
 
 import json
 import os
+import time
+import urllib.request
+import urllib.parse
 import pandas as pd
 from anthropic import Anthropic
 
@@ -299,6 +302,49 @@ def classify_vendors_with_claude(vendor_samples: list[dict],
     return all_results
 
 
+# ── 3c. OPENCORPORATES ENRICHMENT ─────────────────────────────────────────────
+
+def _oc_search(vendor_name: str) -> dict:
+    """Query OpenCorporates free API for one vendor. Returns enrichment dict or {}."""
+    encoded = urllib.parse.quote(vendor_name)
+    url = f"https://api.opencorporates.com/v0.4/companies/search?q={encoded}&format=json"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "SpendLens/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read())
+        companies = data.get("results", {}).get("companies", [])
+        if not companies:
+            return {}
+        best = companies[0]["company"]
+        jurisdiction = best.get("jurisdiction_code", "") or ""
+        return {
+            "oc_jurisdiction": jurisdiction,
+            "oc_country": jurisdiction.split("_")[0].upper() if jurisdiction else "",
+            "oc_registration_number": best.get("company_number", "") or "",
+            "oc_entity_type": best.get("company_type", "") or "",
+        }
+    except Exception:
+        return {}
+
+
+def enrich_vendors_opencorporates(vendor_names: list[str], delay: float = 0.5) -> dict:
+    """
+    Enrich a list of vendor names with OpenCorporates company registry data.
+    Uses the free tier (no API key). Rate-limited to ~2 req/s via delay.
+    Returns {vendor_name: {oc_jurisdiction, oc_country, oc_registration_number, oc_entity_type}}
+    """
+    print(f"  🏢 OpenCorporates: enriching {len(vendor_names)} vendors...")
+    results = {}
+    for i, name in enumerate(vendor_names, 1):
+        results[name] = _oc_search(name)
+        if i % 10 == 0:
+            print(f"    {i}/{len(vendor_names)} vendors done")
+        time.sleep(delay)
+    matched = sum(1 for v in results.values() if v)
+    print(f"  ✅ OpenCorporates: {matched}/{len(vendor_names)} vendors matched")
+    return results
+
+
 # ── 4. APPLY MAPPING BACK TO ALL ROWS ─────────────────────────────────────────
 
 def apply_category_mapping(df: pd.DataFrame,
@@ -317,14 +363,17 @@ def apply_category_mapping(df: pd.DataFrame,
     """
     df = df.copy()
 
-    # Extract category and location from the classification dict
+    # Extract category, location, and OC fields from the classification dict
     df["category_mapped"] = df[vendor_col].map(
         lambda v: classification.get(str(v), {}).get("category", "Uncategorized")
     )
-
     df["office_location"] = df[vendor_col].map(
         lambda v: classification.get(str(v), {}).get("location", None)
     )
+    for oc_field in ("oc_country", "oc_jurisdiction", "oc_registration_number", "oc_entity_type"):
+        df[oc_field] = df[vendor_col].map(
+            lambda v, f=oc_field: classification.get(str(v), {}).get(f, "")
+        )
 
     # Count and report results
     mapped = (df["category_mapped"] != "Uncategorized").sum()
@@ -443,6 +492,20 @@ def run_category_mapping(df: pd.DataFrame,
         df["category_mapped"] = "Uncategorized"
         df["office_location"] = None
         return df, pd.DataFrame()
+
+    # Step 4b: OpenCorporates enrichment for vendors not yet enriched
+    vendors_needing_oc = [
+        v["vendor"] for v in all_vendor_samples
+        if "oc_jurisdiction" not in full_classification.get(v["vendor"], {})
+    ]
+    if vendors_needing_oc:
+        print(f"Step 4b: OpenCorporates enrichment for {len(vendors_needing_oc)} vendors...")
+        oc_results = enrich_vendors_opencorporates(vendors_needing_oc)
+        for vendor, oc_data in oc_results.items():
+            if oc_data:
+                full_classification.setdefault(vendor, {}).update(oc_data)
+        # Persist OC data into cache
+        save_cache(full_classification)
 
     # Step 5: Apply mapping back to all rows
     print("Step 4: Applying mapping to all rows...")
