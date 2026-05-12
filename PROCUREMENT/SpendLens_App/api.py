@@ -122,30 +122,37 @@ def maverick_spend(limit: int = 20):
 # ── /vendors/top ───────────────────────────────────────────────────────────────
 
 @app.get("/vendors/top")
-def top_vendors(limit: int = 20):
-    """Top vendors by spend with compliance and risk data."""
+def top_vendors(limit: int = 20, category: str = None):
+    """Top vendors by spend. Optionally filter by category (fuzzy match)."""
     conn = _conn()
     try:
-        # Join vendors with supplier_profiles for tier + compliance score
-        rows = conn.execute("""
-            SELECT
-                v.vendor_name,
-                v.category,
-                v.total_spend,
-                v.risk_level,
-                v.single_source,
-                v.oc_country,
-                sp.tier,
-                sp.compliance_score,
-                sp.contract_status,
-                sp.po_coverage_pct,
-                sp.relationship_status
-            FROM vendors v
-            LEFT JOIN supplier_profiles sp
-                ON sp.vendor_name = v.vendor_name AND sp.client_name = ?
-            ORDER BY v.total_spend DESC
-            LIMIT ?
-        """, (CLIENT, limit)).fetchall()
+        if category:
+            rows = conn.execute("""
+                SELECT
+                    v.vendor_name, v.category, v.total_spend, v.risk_level,
+                    v.single_source, v.oc_country,
+                    sp.tier, sp.compliance_score, sp.contract_status,
+                    sp.po_coverage_pct, sp.relationship_status
+                FROM vendors v
+                LEFT JOIN supplier_profiles sp
+                    ON sp.vendor_name = v.vendor_name AND sp.client_name = ?
+                WHERE LOWER(v.category) LIKE LOWER(?)
+                ORDER BY v.total_spend DESC
+                LIMIT ?
+            """, (CLIENT, f"%{category}%", limit)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT
+                    v.vendor_name, v.category, v.total_spend, v.risk_level,
+                    v.single_source, v.oc_country,
+                    sp.tier, sp.compliance_score, sp.contract_status,
+                    sp.po_coverage_pct, sp.relationship_status
+                FROM vendors v
+                LEFT JOIN supplier_profiles sp
+                    ON sp.vendor_name = v.vendor_name AND sp.client_name = ?
+                ORDER BY v.total_spend DESC
+                LIMIT ?
+            """, (CLIENT, limit)).fetchall()
     finally:
         conn.close()
 
@@ -166,7 +173,75 @@ def top_vendors(limit: int = 20):
         for r in rows
     ]
 
-    return {"count": len(vendors), "vendors": vendors}
+    return {"count": len(vendors), "vendors": vendors, "category_filter": category}
+
+
+# ── /spend/category/{category} ─────────────────────────────────────────────────
+
+@app.get("/spend/category/{category}")
+def spend_by_category(category: str, limit: int = 10):
+    """Spend breakdown for a single category — total, top vendors, what they're used for."""
+    conn = _conn()
+    try:
+        df = get_full_transaction_view(conn)
+        if df.empty:
+            conn.close()
+            return {"category": category, "total_eur": 0, "vendors": []}
+
+        spend_col = "spend_eur" if "spend_eur" in df.columns and df["spend_eur"].notna().any() else "spend"
+        df["_spend"] = df[spend_col].fillna(0)
+
+        # Fuzzy category match
+        mask = df["category_mapped"].str.lower().str.contains(category.lower(), na=False)
+        cat_df = df[mask]
+
+        if cat_df.empty:
+            conn.close()
+            return {"category": category, "matched_category": None, "total_eur": 0, "vendors": []}
+
+        matched_category = cat_df["category_mapped"].mode()[0]
+        total = float(cat_df["_spend"].sum())
+        tx_count = len(cat_df)
+
+        # Top vendors in category with what they were paid for
+        by_vendor = (
+            cat_df.groupby("supplier")
+            .agg(spend=("_spend", "sum"), txns=("_spend", "count"))
+            .sort_values("spend", ascending=False)
+            .head(limit)
+            .reset_index()
+        )
+
+        vendors = []
+        for _, vrow in by_vendor.iterrows():
+            vendor_name = vrow["supplier"]
+            # Sample descriptions to show what the vendor was paid for
+            descriptions = (
+                cat_df[cat_df["supplier"] == vendor_name]["description"]
+                .dropna()
+                .unique()
+                .tolist()[:3]
+            )
+            vendors.append({
+                "vendor_name": vendor_name,
+                "spend_eur": round(float(vrow["spend"]), 2),
+                "transaction_count": int(vrow["txns"]),
+                "pct_of_category": round(float(vrow["spend"]) / total * 100, 1) if total else 0,
+                "used_for": [str(d)[:60] for d in descriptions],
+            })
+
+        conn.close()
+        return {
+            "category": category,
+            "matched_category": matched_category,
+            "total_eur": round(total, 2),
+            "transaction_count": tx_count,
+            "vendor_count": len(by_vendor),
+            "vendors": vendors,
+        }
+    except Exception:
+        conn.close()
+        raise
 
 
 # ── /vendors/{name} ────────────────────────────────────────────────────────────
