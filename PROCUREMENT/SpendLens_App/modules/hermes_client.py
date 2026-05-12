@@ -50,8 +50,23 @@ SIGNAL_TO_IMPACT = {
 URGENCY_TO_RELEVANCE = {"HIGH": 9, "MEDIUM": 7, "LOW": 5}
 
 
+SPENDLENS_CATEGORY_TO_HERMES = {
+    "Cloud & Compute":          "Cloud & Infrastructure",
+    "AI/ML APIs & Data":        "AI Foundation Labs",
+    "IT Software & SaaS":       "SaaS & Dev Tools",
+    "Telecom & Voice":          "Telecom",
+    "Recruitment & HR":         "HR & Talent",
+    "Professional Services":    "Professional Services",
+    "Marketing & Campaigns":    "Marketing Tech",
+    "Facilities & Office":      "Facilities",
+    "Real Estate":              "Real Estate",
+    "Hardware & Equipment":     "Semiconductors & Chips",
+    "Travel & Expenses":        "Travel & Logistics",
+}
+
+
 class HermesClient:
-    """Read-only client for querying Hermes market intelligence from SpendLens."""
+    """Read/write client for Hermes market intelligence, shared via Upstash Redis."""
 
     def __init__(self):
         self.r = Redis(
@@ -136,6 +151,81 @@ class HermesClient:
                 "signals": signals,
             }
         return result
+
+    def register_vendor(self, vendor_name: str, category: str, spend_eur: float = 0,
+                        country: str = None, source: str = "spendlens") -> bool:
+        """
+        Register a SpendLens vendor in Hermes watchlist so crawlers start covering it.
+        Writes to hermes:watchlist:{slug} with metadata. Does NOT overwrite existing
+        supplier signal lists — only ensures the vendor is known to Hermes.
+        Returns True if newly registered, False if already existed.
+        """
+        slug = self._slug(vendor_name)
+        watchlist_key = f"hermes:watchlist:{slug}"
+        if self.r.exists(watchlist_key):
+            return False
+        hermes_category = SPENDLENS_CATEGORY_TO_HERMES.get(category, category)
+        entry = {
+            "name": vendor_name,
+            "slug": slug,
+            "category": hermes_category,
+            "spend_eur": round(spend_eur, 2),
+            "country": country or "",
+            "source": source,
+            "registered_at": __import__("datetime").datetime.utcnow().isoformat(),
+        }
+        self.r.set(watchlist_key, json.dumps(entry))
+        self._slug_cache = None  # invalidate cache so new vendor is discoverable
+        return True
+
+    def push_vendor_list(self, vendors: list[dict]) -> dict:
+        """
+        Bulk-register a list of SpendLens vendors into Hermes watchlist.
+        Each vendor dict must have: vendor_name, category.
+        Optional: spend_eur, country.
+        Returns {"registered": N, "already_tracked": M}.
+        """
+        new_count = 0
+        existing_count = 0
+        for v in vendors:
+            is_new = self.register_vendor(
+                vendor_name=v["vendor_name"],
+                category=v.get("category", ""),
+                spend_eur=v.get("spend_eur", 0),
+                country=v.get("country", ""),
+            )
+            if is_new:
+                new_count += 1
+            else:
+                existing_count += 1
+        return {"registered": new_count, "already_tracked": existing_count}
+
+    def get_vendor_intel(self, vendor_name: str, limit: int = 5) -> dict:
+        """
+        Return all available Hermes intelligence for a vendor — signals + watchlist status.
+        Used to enrich SpendLens vendor profiles with live market data.
+        """
+        slug = self._resolve(vendor_name)
+        tracked = slug is not None
+        signals = self.get_signals(vendor_name, limit=limit, procurement_only=False) if tracked else []
+        risk_flags = [s for s in signals if s.get("urgency") in ("HIGH", "MEDIUM") and s.get("is_significant")]
+        return {
+            "tracked_by_hermes": tracked,
+            "hermes_slug": slug,
+            "signal_count": len(signals),
+            "risk_flags": len(risk_flags),
+            "top_signals": [
+                {
+                    "title": s.get("title", "")[:120],
+                    "signal_type": s.get("signal_type"),
+                    "urgency": s.get("urgency"),
+                    "published": s.get("published", "")[:10],
+                    "significance_reason": s.get("significance_reason", "")[:150],
+                    "url": s.get("url", ""),
+                }
+                for s in signals[:limit]
+            ],
+        }
 
     def to_icarus_signals(self, hermes_items: list[dict]) -> list[dict]:
         """

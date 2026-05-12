@@ -290,6 +290,14 @@ def vendor_profile(name: str):
     finally:
         conn.close()
 
+    # Pull live Hermes intel for this vendor
+    hermes_intel = {}
+    try:
+        from modules.hermes_client import HermesClient
+        hermes_intel = HermesClient().get_vendor_intel(vendor_name, limit=5)
+    except Exception:
+        pass
+
     return {
         "vendor_name": vendor_name,
         "category": row["category"],
@@ -323,4 +331,18 @@ def vendor_profile(name: str):
             }
             for t in txns
         ],
+        "hermes_intel": hermes_intel,
     }
+
+
+# ── /vendors/{name}/signals ────────────────────────────────────────────────────
+
+@app.get("/vendors/{name}/signals")
+def vendor_signals(name: str, limit: int = 10):
+    """Live Hermes market intelligence signals for a specific vendor."""
+    try:
+        from modules.hermes_client import HermesClient
+        intel = HermesClient().get_vendor_intel(name, limit=limit)
+        return intel
+    except Exception as e:
+        raise HTTPException(503, f"Hermes unavailable: {e}")

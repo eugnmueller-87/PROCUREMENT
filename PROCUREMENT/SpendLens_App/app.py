@@ -1273,7 +1273,27 @@ def run_pipeline(filename: str, file_bytes: bytes,
         conn.close()
         status_callback("🏆 Supplier profiles updated")
 
-        # Step 8: Update dashboard
+        # Step 8: Push new vendors to Hermes watchlist
+        try:
+            from modules.hermes_client import HermesClient
+            conn = get_connection("default")
+            vendor_rows = conn.execute(
+                "SELECT vendor_name, category, total_spend, oc_country FROM vendors ORDER BY total_spend DESC LIMIT 100"
+            ).fetchall()
+            conn.close()
+            if vendor_rows:
+                vendor_list = [
+                    {"vendor_name": r["vendor_name"], "category": r["category"] or "",
+                     "spend_eur": float(r["total_spend"] or 0), "country": r["oc_country"] or ""}
+                    for r in vendor_rows
+                ]
+                result = HermesClient().push_vendor_list(vendor_list)
+                if result["registered"] > 0:
+                    status_callback(f"🔭 Registered {result['registered']} new vendors with Hermes")
+        except Exception as hermes_err:
+            status_callback(f"⚠ Hermes sync skipped: {hermes_err}")
+
+        # Step 9: Update dashboard
         status_callback("📊 Updating dashboard...")
         dashboard_callback(flagged_df, filename)
         refresh_compliance_tab()
