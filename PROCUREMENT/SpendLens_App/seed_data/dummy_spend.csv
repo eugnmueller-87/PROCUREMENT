@@ -1,202 +1,205 @@
 date,supplier,spend,currency,department,po_number,description,contract_end,region,single_source
-2025-01-05,AWS,48500,EUR,Engineering,PO-2025-001,Cloud infrastructure - EC2 + S3 production,2025-12-31,DE,FALSE
-2025-01-08,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure DevOps + Active Directory licenses,2025-11-30,DE,FALSE
-2025-01-10,Salesforce,14800,EUR,Sales,,CRM licenses Q1 - no PO raised,2026-03-31,DE,FALSE
-2025-01-12,Personio,8200,EUR,HR,PO-2025-003,HR software annual subscription,2025-12-31,DE,TRUE
-2025-01-14,Slack,3400,EUR,Engineering,,Slack Pro - invoice paid without PO,,DE,FALSE
-2025-01-15,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office co-working January,2025-12-31,DE,TRUE
-2025-01-18,Lufthansa,2100,EUR,Management,,Flights Frankfurt-London business travel,,DE,FALSE
-2025-01-20,Google Cloud,31200,EUR,Engineering,PO-2025-005,BigQuery + Vertex AI production,2025-12-31,DE,FALSE
-2025-01-22,OpenAI,9800,EUR,Product,,GPT-4 API usage - no contract in place,,DE,FALSE
-2025-01-25,Workday,11500,EUR,HR,PO-2025-006,Workday HCM annual license,2026-01-31,DE,FALSE
-2025-01-28,KPMG,24000,EUR,Finance,PO-2025-007,Annual audit services Q1,2025-12-31,DE,FALSE
-2025-02-02,AWS,51200,EUR,Engineering,PO-2025-001,Cloud infrastructure February,2025-12-31,DE,FALSE
-2025-02-04,Stripe,4300,EUR,Engineering,,Payment processing fees - direct debit,,DE,FALSE
-2025-02-06,Twilio,6700,EUR,Product,PO-2025-008,SMS + voice API services,2025-09-30,DE,FALSE
-2025-02-10,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office co-working February,2025-12-31,DE,TRUE
-2025-02-12,LinkedIn,5600,EUR,HR,,LinkedIn Recruiter - no PO raised,,DE,FALSE
-2025-02-14,Snowflake,13400,EUR,Data,PO-2025-009,Data warehouse cloud platform,2025-12-31,DE,FALSE
-2025-02-18,Google Cloud,29800,EUR,Engineering,PO-2025-005,BigQuery production February,2025-12-31,DE,FALSE
-2025-02-20,Zoom,2800,EUR,All,,Zoom Business licenses - no contract,,DE,FALSE
-2025-02-22,HubSpot,7200,EUR,Marketing,,HubSpot Marketing Hub - no PO,,DE,FALSE
-2025-02-25,McKinsey,38000,EUR,Strategy,PO-2025-010,Digital transformation consulting,2025-06-30,DE,TRUE
-2025-02-28,Lufthansa,1800,EUR,Sales,,Business travel February,,DE,FALSE
-2025-03-03,AWS,49700,EUR,Engineering,PO-2025-001,Cloud infrastructure March,2025-12-31,DE,FALSE
+2025-01-05,Amazon Web Services,48500,EUR,Engineering,PO-2025-001,Cloud infrastructure EC2 + S3 + RDS production,2025-12-31,DE,FALSE
+2025-01-06,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure DevOps + Active Directory licenses,2025-11-30,DE,FALSE
+2025-01-08,Google Cloud Platform,31200,EUR,Engineering,PO-2025-003,BigQuery data warehouse + Vertex AI,2025-12-31,DE,FALSE
+2025-01-10,Salesforce,14800,EUR,Sales,,CRM licenses Q1 - invoice paid without PO,2026-03-31,DE,FALSE
+2025-01-12,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform annual subscription,2025-12-31,DE,TRUE
+2025-01-14,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office co-working January,2025-12-31,DE,TRUE
+2025-01-15,Lufthansa AG,2100,EUR,Management,,Business flights Berlin-London Q1,,DE,FALSE
+2025-01-17,OpenAI Inc.,9800,EUR,Product,,GPT-4 API usage - no contract in place,,DE,TRUE
+2025-01-19,Workday Inc.,11500,EUR,HR,PO-2025-006,Workday HCM annual license,2026-01-31,DE,FALSE
+2025-01-21,KPMG AG Wirtschaftsprüfungsgesellschaft,24000,EUR,Finance,PO-2025-007,Annual statutory audit Q1,2025-12-31,DE,FALSE
+2025-01-23,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Infrastructure monitoring + APM,2025-12-31,DE,FALSE
+2025-01-25,Snowflake Inc.,13400,EUR,Data & Analytics,PO-2025-009,Cloud data platform,2025-12-31,DE,FALSE
+2025-01-27,Anthropic PBC,7600,EUR,Product,,Claude API usage - no PO raised,,DE,TRUE
+2025-01-29,Twilio Inc.,6700,EUR,Product,PO-2025-010,SMS + voice API services,2025-09-30,DE,FALSE
+2025-01-30,Stripe Inc.,4300,EUR,Engineering,,Payment processing fees - direct debit,,DE,FALSE
+2025-02-03,Amazon Web Services,51200,EUR,Engineering,PO-2025-001,Cloud infrastructure February,2025-12-31,DE,FALSE
+2025-02-05,SAP SE,32000,EUR,Finance,PO-2025-011,SAP S/4HANA license renewal,2026-03-31,DE,FALSE
+2025-02-07,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining platform license,2026-04-30,DE,TRUE
+2025-02-10,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office February,2025-12-31,DE,TRUE
+2025-02-12,LinkedIn Ireland Unlimited,5600,EUR,HR,,LinkedIn Recruiter seats - no PO raised,,DE,FALSE
+2025-02-14,HubSpot Inc.,7200,EUR,Marketing,,Marketing Hub Professional - no contract,,DE,FALSE
+2025-02-17,Google Cloud Platform,29800,EUR,Engineering,PO-2025-003,BigQuery production February,2025-12-31,DE,FALSE
+2025-02-19,McKinsey & Company,38000,EUR,Strategy,PO-2025-013,Digital transformation consulting phase 1,2025-06-30,DE,TRUE
+2025-02-21,Lufthansa AG,1800,EUR,Sales,,Business travel February,,DE,FALSE
+2025-02-24,Zoom Video Communications,2800,EUR,All,,Zoom Business licenses - no contract signed,,DE,FALSE
+2025-02-26,Contentful GmbH,6800,EUR,Product,PO-2025-014,Headless CMS annual license,2025-10-31,DE,FALSE
+2025-02-28,Fiverr International,2800,EUR,Marketing,,Freelance design work - no PO raised,,DE,FALSE
+2025-03-03,Amazon Web Services,49700,EUR,Engineering,PO-2025-001,Cloud infrastructure March,2025-12-31,DE,FALSE
 2025-03-05,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure licenses March,2025-11-30,DE,FALSE
-2025-03-08,Personio,8200,EUR,HR,PO-2025-003,HR software Q1 final,2025-12-31,DE,TRUE
-2025-03-10,SAP,32000,EUR,Finance,PO-2025-011,SAP S/4HANA license renewal,2026-03-31,DE,FALSE
-2025-03-12,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office March,2025-12-31,DE,TRUE
-2025-03-15,Anthropic,12400,EUR,Product,,Claude API usage - no PO raised,,DE,TRUE
-2025-03-18,Datadog,8900,EUR,Engineering,PO-2025-012,Infrastructure monitoring,2025-12-31,DE,FALSE
-2025-03-20,Stepstone,4200,EUR,HR,,Job postings Q1 - no PO,,DE,FALSE
-2025-03-22,Google Cloud,33100,EUR,Engineering,PO-2025-005,BigQuery + Vertex March,2025-12-31,DE,FALSE
-2025-03-25,Deloitte,19500,EUR,Finance,PO-2025-013,Tax advisory services,2025-12-31,DE,FALSE
-2025-03-28,Booking.com,3100,EUR,Management,,Hotel bookings management offsite,,DE,FALSE
-2025-03-30,Salesforce,14800,EUR,Sales,,CRM licenses Q1 renewal - no PO,2026-03-31,DE,FALSE
-2025-04-02,AWS,53400,EUR,Engineering,PO-2025-014,Cloud infrastructure April + new RDS,2025-12-31,DE,FALSE
-2025-04-05,Celonis,15200,EUR,Operations,PO-2025-015,Process mining platform,2026-04-30,DE,TRUE
-2025-04-07,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office April,2025-12-31,DE,TRUE
-2025-04-09,Contentful,6800,EUR,Product,PO-2025-016,CMS platform annual,2025-10-31,DE,FALSE
-2025-04-11,Stripe,4100,EUR,Engineering,,Payment processing April - direct debit,,DE,FALSE
-2025-04-14,Twilio,6900,EUR,Product,PO-2025-008,SMS API April,2025-09-30,DE,FALSE
-2025-04-16,Personio,8200,EUR,HR,PO-2025-003,HR software Q2 start,2025-12-31,DE,TRUE
-2025-04-18,Google Cloud,30500,EUR,Engineering,PO-2025-005,BigQuery April,2025-12-31,DE,FALSE
-2025-04-21,OpenAI,11200,EUR,Product,,GPT-4 API usage April - no contract,,DE,FALSE
-2025-04-23,Fiverr,2800,EUR,Marketing,,Freelance design work - no PO raised,,DE,FALSE
-2025-04-25,KPMG,24000,EUR,Finance,PO-2025-007,Audit services Q2,2025-12-31,DE,FALSE
-2025-04-28,LinkedIn,5600,EUR,HR,,LinkedIn Recruiter April - no PO,,DE,FALSE
-2025-04-30,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure licenses April,2025-11-30,DE,FALSE
-2025-05-02,AWS,52100,EUR,Engineering,PO-2025-014,Cloud infrastructure May,2025-12-31,DE,FALSE
-2025-05-05,Snowflake,13400,EUR,Data,PO-2025-009,Data warehouse May,2025-12-31,DE,FALSE
-2025-05-07,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office May,2025-12-31,DE,TRUE
-2025-05-09,Zoom,2800,EUR,All,,Zoom licenses May - no contract,,DE,FALSE
-2025-05-12,Anthropic,14600,EUR,Product,,Claude API May - no PO,,DE,TRUE
-2025-05-14,Datadog,8900,EUR,Engineering,PO-2025-012,Monitoring May,2025-12-31,DE,FALSE
-2025-05-16,HubSpot,7200,EUR,Marketing,,HubSpot May - no PO,,DE,FALSE
-2025-05-19,SAP,32000,EUR,Finance,PO-2025-011,SAP license Q2,2026-03-31,DE,FALSE
-2025-05-21,Google Cloud,31800,EUR,Engineering,PO-2025-005,BigQuery May,2025-12-31,DE,FALSE
-2025-05-23,Lufthansa,2400,EUR,Sales,,Business travel May,,DE,FALSE
-2025-05-26,McKinsey,38000,EUR,Strategy,PO-2025-010,Consulting May,2025-06-30,DE,TRUE
-2025-05-28,Personio,8200,EUR,HR,PO-2025-003,HR software May,2025-12-31,DE,TRUE
-2025-05-30,Celonis,15200,EUR,Operations,PO-2025-015,Process mining May,2026-04-30,DE,TRUE
-2025-06-02,AWS,55800,EUR,Engineering,PO-2025-014,Cloud infrastructure June + Lambda scale,2025-12-31,DE,FALSE
+2025-03-07,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform Q1 final month,2025-12-31,DE,TRUE
+2025-03-10,Google Cloud Platform,33100,EUR,Engineering,PO-2025-003,BigQuery + Vertex AI March,2025-12-31,DE,FALSE
+2025-03-12,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office March,2025-12-31,DE,TRUE
+2025-03-14,Anthropic PBC,12400,EUR,Product,,Claude API March - no PO in place,,DE,TRUE
+2025-03-17,Stepstone GmbH,4200,EUR,HR,,Job board postings Q1 - no PO raised,,DE,FALSE
+2025-03-19,Deloitte GmbH Wirtschaftsprüfungsgesellschaft,19500,EUR,Finance,PO-2025-015,Tax advisory services Q1,2025-12-31,DE,FALSE
+2025-03-21,Booking.com B.V.,3100,EUR,Management,,Hotel bookings management offsite,,DE,FALSE
+2025-03-24,Salesforce,14800,EUR,Sales,,CRM Q1 renewal - still no PO raised,2026-03-31,DE,FALSE
+2025-03-26,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Infrastructure monitoring March,2025-12-31,DE,FALSE
+2025-03-28,Twilio Inc.,6900,EUR,Product,PO-2025-010,SMS API March,2025-09-30,DE,FALSE
+2025-04-02,Amazon Web Services,53400,EUR,Engineering,PO-2025-016,Cloud infrastructure April + new Aurora RDS,2025-12-31,DE,FALSE
+2025-04-04,Google Cloud Platform,30500,EUR,Engineering,PO-2025-003,BigQuery April,2025-12-31,DE,FALSE
+2025-04-07,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office April,2025-12-31,DE,TRUE
+2025-04-09,OpenAI Inc.,11200,EUR,Product,,GPT-4 API April - no contract in place,,DE,TRUE
+2025-04-11,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform April,2025-12-31,DE,TRUE
+2025-04-14,Stripe Inc.,4100,EUR,Engineering,,Payment processing April - direct debit,,DE,FALSE
+2025-04-16,KPMG AG Wirtschaftsprüfungsgesellschaft,24000,EUR,Finance,PO-2025-007,Audit services Q2,2025-12-31,DE,FALSE
+2025-04-18,LinkedIn Ireland Unlimited,5600,EUR,HR,,LinkedIn Recruiter April - no PO raised,,DE,FALSE
+2025-04-21,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure licenses April,2025-11-30,DE,FALSE
+2025-04-23,Snowflake Inc.,13400,EUR,Data & Analytics,PO-2025-009,Data warehouse April,2025-12-31,DE,FALSE
+2025-04-25,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining April,2026-04-30,DE,TRUE
+2025-04-28,Anthropic PBC,14600,EUR,Product,,Claude API April - no PO in place,,DE,TRUE
+2025-04-30,HubSpot Inc.,7200,EUR,Marketing,,HubSpot April - no PO raised,,DE,FALSE
+2025-05-02,Amazon Web Services,52100,EUR,Engineering,PO-2025-016,Cloud infrastructure May,2025-12-31,DE,FALSE
+2025-05-05,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license Q2,2026-03-31,DE,FALSE
+2025-05-07,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office May,2025-12-31,DE,TRUE
+2025-05-09,Zoom Video Communications,2800,EUR,All,,Zoom licenses May - no contract,,DE,FALSE
+2025-05-12,Google Cloud Platform,31800,EUR,Engineering,PO-2025-003,BigQuery May,2025-12-31,DE,FALSE
+2025-05-14,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Monitoring May,2025-12-31,DE,FALSE
+2025-05-16,McKinsey & Company,38000,EUR,Strategy,PO-2025-013,Consulting May - strategy phase 1,2025-06-30,DE,TRUE
+2025-05-19,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform May,2025-12-31,DE,TRUE
+2025-05-21,Lufthansa AG,2400,EUR,Sales,,Business travel May,,DE,FALSE
+2025-05-23,Twilio Inc.,7100,EUR,Product,PO-2025-010,SMS API May,2025-09-30,DE,FALSE
+2025-05-26,Salesforce,14800,EUR,Sales,,CRM May - no PO all year,2026-03-31,DE,FALSE
+2025-05-28,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining May,2026-04-30,DE,TRUE
+2025-06-02,Amazon Web Services,55800,EUR,Engineering,PO-2025-016,Cloud infrastructure June + Lambda scale-out,2025-12-31,DE,FALSE
 2025-06-04,Microsoft Azure,23100,EUR,Engineering,PO-2025-002,Azure licenses June,2025-11-30,DE,FALSE
-2025-06-06,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office June,2025-12-31,DE,TRUE
-2025-06-09,Salesforce,14800,EUR,Sales,,CRM Q2 - still no PO raised,2026-03-31,DE,FALSE
-2025-06-11,Stripe,4500,EUR,Engineering,,Payment processing June,,DE,FALSE
-2025-06-13,OpenAI,13900,EUR,Product,,GPT-4 API June - no contract,,DE,FALSE
-2025-06-16,Google Cloud,34200,EUR,Engineering,PO-2025-005,BigQuery + Vertex June,2025-12-31,DE,FALSE
-2025-06-18,Fiverr,1900,EUR,Design,,Freelance video editing - no PO,,DE,FALSE
-2025-06-20,KPMG,24000,EUR,Finance,PO-2025-007,Audit Q2 final,2025-12-31,DE,FALSE
-2025-06-23,Stepstone,3800,EUR,HR,,Job postings June - no PO,,DE,FALSE
-2025-06-25,Twilio,7100,EUR,Product,PO-2025-008,SMS API June,2025-09-30,DE,FALSE
-2025-06-27,Datadog,8900,EUR,Engineering,PO-2025-012,Monitoring June,2025-12-31,DE,FALSE
-2025-06-30,Deloitte,19500,EUR,Finance,PO-2025-013,Tax advisory June,2025-12-31,DE,FALSE
-2025-07-02,AWS,54300,EUR,Engineering,PO-2025-014,Cloud infrastructure July,2025-12-31,DE,FALSE
-2025-07-04,Personio,8200,EUR,HR,PO-2025-003,HR software July,2025-12-31,DE,TRUE
-2025-07-07,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office July,2025-12-31,DE,TRUE
-2025-07-09,Snowflake,13400,EUR,Data,PO-2025-009,Data warehouse July,2025-12-31,DE,FALSE
-2025-07-11,Google Cloud,32400,EUR,Engineering,PO-2025-005,BigQuery July,2025-12-31,DE,FALSE
-2025-07-14,Anthropic,16200,EUR,Product,,Claude API July - no PO,,DE,TRUE
+2025-06-06,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office June,2025-12-31,DE,TRUE
+2025-06-09,OpenAI Inc.,13900,EUR,Product,,GPT-4 API June - still no contract,,DE,TRUE
+2025-06-11,Stripe Inc.,4500,EUR,Engineering,,Payment processing June,,DE,FALSE
+2025-06-13,Google Cloud Platform,34200,EUR,Engineering,PO-2025-003,BigQuery + Vertex AI June,2025-12-31,DE,FALSE
+2025-06-16,Fiverr International,1900,EUR,Marketing,,Freelance video editing - no PO raised,,DE,FALSE
+2025-06-18,KPMG AG Wirtschaftsprüfungsgesellschaft,24000,EUR,Finance,PO-2025-007,Audit Q2 final,2025-12-31,DE,FALSE
+2025-06-20,Stepstone GmbH,3800,EUR,HR,,Job postings June - no PO raised,,DE,FALSE
+2025-06-23,Anthropic PBC,16200,EUR,Product,,Claude API June - no PO in place,,DE,TRUE
+2025-06-25,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Monitoring June,2025-12-31,DE,FALSE
+2025-06-27,Deloitte GmbH Wirtschaftsprüfungsgesellschaft,19500,EUR,Finance,PO-2025-015,Tax advisory June,2025-12-31,DE,FALSE
+2025-07-02,Amazon Web Services,54300,EUR,Engineering,PO-2025-016,Cloud infrastructure July,2025-12-31,DE,FALSE
+2025-07-04,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform July,2025-12-31,DE,TRUE
+2025-07-07,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office July,2025-12-31,DE,TRUE
+2025-07-09,Snowflake Inc.,13400,EUR,Data & Analytics,PO-2025-009,Data warehouse July,2025-12-31,DE,FALSE
+2025-07-11,Google Cloud Platform,32400,EUR,Engineering,PO-2025-003,BigQuery July,2025-12-31,DE,FALSE
+2025-07-14,Anthropic PBC,18900,EUR,Product,,Claude API July - no PO in place,,DE,TRUE
 2025-07-16,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure licenses July,2025-11-30,DE,FALSE
-2025-07-18,SAP,32000,EUR,Finance,PO-2025-011,SAP license Q3,2026-03-31,DE,FALSE
-2025-07-21,HubSpot,7200,EUR,Marketing,,HubSpot July - no PO,,DE,FALSE
-2025-07-23,LinkedIn,5600,EUR,HR,,LinkedIn Recruiter July - no PO,,DE,FALSE
-2025-07-25,Celonis,15200,EUR,Operations,PO-2025-015,Process mining July,2026-04-30,DE,TRUE
-2025-07-28,Lufthansa,3200,EUR,Management,,Executive travel July,,DE,FALSE
-2025-07-30,Zoom,2800,EUR,All,,Zoom July - no contract,,DE,FALSE
-2025-08-01,AWS,56700,EUR,Engineering,PO-2025-014,Cloud infrastructure August,2025-12-31,DE,FALSE
-2025-08-04,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office August,2025-12-31,DE,TRUE
-2025-08-06,Stripe,4200,EUR,Engineering,,Payment processing August,,DE,FALSE
-2025-08-08,Google Cloud,33900,EUR,Engineering,PO-2025-005,BigQuery August,2025-12-31,DE,FALSE
-2025-08-11,OpenAI,15400,EUR,Product,,GPT-4 API August - no contract,,DE,FALSE
-2025-08-13,Salesforce,14800,EUR,Sales,,CRM Q3 - still no PO,2026-03-31,DE,FALSE
-2025-08-15,Personio,8200,EUR,HR,PO-2025-003,HR software August,2025-12-31,DE,TRUE
-2025-08-18,KPMG,24000,EUR,Finance,PO-2025-007,Audit Q3,2025-12-31,DE,FALSE
-2025-08-20,Datadog,8900,EUR,Engineering,PO-2025-012,Monitoring August,2025-12-31,DE,FALSE
+2025-07-18,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license Q3,2026-03-31,DE,FALSE
+2025-07-21,HubSpot Inc.,7200,EUR,Marketing,,HubSpot July - no PO raised,,DE,FALSE
+2025-07-23,LinkedIn Ireland Unlimited,5600,EUR,HR,,LinkedIn Recruiter July - no PO raised,,DE,FALSE
+2025-07-25,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining July,2026-04-30,DE,TRUE
+2025-07-28,Lufthansa AG,3200,EUR,Management,,Executive travel July,,DE,FALSE
+2025-07-30,Zoom Video Communications,2800,EUR,All,,Zoom July - still no contract,,DE,FALSE
+2025-08-01,Amazon Web Services,56700,EUR,Engineering,PO-2025-016,Cloud infrastructure August,2025-12-31,DE,FALSE
+2025-08-04,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office August,2025-12-31,DE,TRUE
+2025-08-06,Stripe Inc.,4200,EUR,Engineering,,Payment processing August,,DE,FALSE
+2025-08-08,Google Cloud Platform,33900,EUR,Engineering,PO-2025-003,BigQuery August,2025-12-31,DE,FALSE
+2025-08-11,OpenAI Inc.,15400,EUR,Product,,GPT-4 API August - no contract,,DE,TRUE
+2025-08-13,Salesforce,14800,EUR,Sales,,CRM Q3 - no PO all year,2026-03-31,DE,FALSE
+2025-08-15,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform August,2025-12-31,DE,TRUE
+2025-08-18,KPMG AG Wirtschaftsprüfungsgesellschaft,24000,EUR,Finance,PO-2025-007,Audit Q3,2025-12-31,DE,FALSE
+2025-08-20,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Monitoring August,2025-12-31,DE,FALSE
 2025-08-22,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure licenses August,2025-11-30,DE,FALSE
-2025-08-25,Twilio,7300,EUR,Product,PO-2025-008,SMS API August,2025-09-30,DE,FALSE
-2025-08-27,McKinsey,42000,EUR,Strategy,PO-2025-017,Strategy phase 2 - new SOW,2025-12-31,DE,TRUE
-2025-08-29,Fiverr,3200,EUR,Marketing,,Freelance content creation - no PO,,DE,FALSE
-2025-09-01,AWS,58200,EUR,Engineering,PO-2025-014,Cloud infrastructure September,2025-12-31,DE,FALSE
-2025-09-03,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office September,2025-12-31,DE,TRUE
-2025-09-05,Snowflake,13400,EUR,Data,PO-2025-009,Data warehouse September,2025-12-31,DE,FALSE
-2025-09-08,Google Cloud,35100,EUR,Engineering,PO-2025-005,BigQuery September,2025-12-31,DE,FALSE
-2025-09-10,Anthropic,18900,EUR,Product,,Claude API September - no PO,,DE,TRUE
-2025-09-12,SAP,32000,EUR,Finance,PO-2025-011,SAP license September,2026-03-31,DE,FALSE
-2025-09-15,Celonis,15200,EUR,Operations,PO-2025-015,Process mining September,2026-04-30,DE,TRUE
-2025-09-17,Personio,8200,EUR,HR,PO-2025-003,HR software September,2025-12-31,DE,TRUE
-2025-09-19,HubSpot,7200,EUR,Marketing,,HubSpot September - no PO,,DE,FALSE
-2025-09-22,LinkedIn,5600,EUR,HR,,LinkedIn Recruiter September - no PO,,DE,FALSE
+2025-08-25,Twilio Inc.,7300,EUR,Product,PO-2025-010,SMS API August,2025-09-30,DE,FALSE
+2025-08-27,McKinsey & Company,42000,EUR,Strategy,PO-2025-017,Strategy phase 2 - new statement of work,2025-12-31,DE,TRUE
+2025-08-29,Fiverr International,3200,EUR,Marketing,,Freelance content creation - no PO raised,,DE,FALSE
+2025-09-01,Amazon Web Services,58200,EUR,Engineering,PO-2025-016,Cloud infrastructure September,2025-12-31,DE,FALSE
+2025-09-03,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office September,2025-12-31,DE,TRUE
+2025-09-05,Snowflake Inc.,13400,EUR,Data & Analytics,PO-2025-009,Data warehouse September,2025-12-31,DE,FALSE
+2025-09-08,Google Cloud Platform,35100,EUR,Engineering,PO-2025-003,BigQuery September,2025-12-31,DE,FALSE
+2025-09-10,Anthropic PBC,21300,EUR,Product,,Claude API September - no PO,,DE,TRUE
+2025-09-12,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license September,2026-03-31,DE,FALSE
+2025-09-15,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining September,2026-04-30,DE,TRUE
+2025-09-17,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform September,2025-12-31,DE,TRUE
+2025-09-19,HubSpot Inc.,7200,EUR,Marketing,,HubSpot September - no PO raised,,DE,FALSE
+2025-09-22,LinkedIn Ireland Unlimited,5600,EUR,HR,,LinkedIn Recruiter September - no PO,,DE,FALSE
 2025-09-24,Microsoft Azure,22300,EUR,Engineering,PO-2025-002,Azure licenses September,2025-11-30,DE,FALSE
-2025-09-26,Deloitte,19500,EUR,Finance,PO-2025-013,Tax advisory Q3,2025-12-31,DE,FALSE
-2025-09-29,Lufthansa,2700,EUR,Sales,,Business travel September,,DE,FALSE
-2025-10-01,AWS,61400,EUR,Engineering,PO-2025-018,Cloud infrastructure October - new contract,2026-12-31,DE,FALSE
-2025-10-03,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office October,2025-12-31,DE,TRUE
-2025-10-06,Google Cloud,36800,EUR,Engineering,PO-2025-019,BigQuery + Vertex October - new contract,2026-12-31,DE,FALSE
+2025-09-26,Deloitte GmbH Wirtschaftsprüfungsgesellschaft,19500,EUR,Finance,PO-2025-015,Tax advisory Q3,2025-12-31,DE,FALSE
+2025-09-29,Lufthansa AG,2700,EUR,Sales,,Business travel September,,DE,FALSE
+2025-10-01,Amazon Web Services,61400,EUR,Engineering,PO-2025-018,Cloud infrastructure October - new 2yr contract,2026-12-31,DE,FALSE
+2025-10-03,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office October,2025-12-31,DE,TRUE
+2025-10-06,Google Cloud Platform,36800,EUR,Engineering,PO-2025-019,BigQuery + Vertex AI October - new contract,2026-12-31,DE,FALSE
 2025-10-08,Salesforce,14800,EUR,Sales,,CRM Q4 - still no PO raised,2026-03-31,DE,FALSE
-2025-10-10,OpenAI,17200,EUR,Product,,GPT-4 API October - no contract,,DE,FALSE
-2025-10-13,Datadog,8900,EUR,Engineering,PO-2025-012,Monitoring October,2025-12-31,DE,FALSE
-2025-10-15,Personio,8200,EUR,HR,PO-2025-003,HR software October,2025-12-31,DE,TRUE
-2025-10-17,Stripe,4600,EUR,Engineering,,Payment processing October,,DE,FALSE
-2025-10-20,SAP,32000,EUR,Finance,PO-2025-011,SAP license October,2026-03-31,DE,FALSE
-2025-10-22,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure licenses October - expanded,2026-10-31,DE,FALSE
-2025-10-24,Snowflake,13400,EUR,Data,PO-2025-009,Data warehouse October,2025-12-31,DE,FALSE
-2025-10-27,Twilio,7500,EUR,Product,PO-2025-008,SMS API October,2025-09-30,DE,FALSE
-2025-10-29,KPMG,24000,EUR,Finance,PO-2025-007,Audit Q4,2025-12-31,DE,FALSE
-2025-10-31,Celonis,15200,EUR,Operations,PO-2025-015,Process mining October,2026-04-30,DE,TRUE
-2025-11-03,AWS,63100,EUR,Engineering,PO-2025-018,Cloud infrastructure November,2026-12-31,DE,FALSE
-2025-11-05,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office November,2025-12-31,DE,TRUE
-2025-11-07,Anthropic,21300,EUR,Product,,Claude API November - still no PO,,DE,TRUE
-2025-11-10,Google Cloud,37500,EUR,Engineering,PO-2025-019,BigQuery November,2026-12-31,DE,FALSE
-2025-11-12,HubSpot,7200,EUR,Marketing,,HubSpot November - no PO,,DE,FALSE
-2025-11-14,Personio,8200,EUR,HR,PO-2025-003,HR software November,2025-12-31,DE,TRUE
-2025-11-17,LinkedIn,5600,EUR,HR,,LinkedIn Recruiter November - no PO,,DE,FALSE
+2025-10-10,OpenAI Inc.,17200,EUR,Product,,GPT-4 API October - no contract,,DE,TRUE
+2025-10-13,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Monitoring October,2025-12-31,DE,FALSE
+2025-10-15,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform October,2025-12-31,DE,TRUE
+2025-10-17,Stripe Inc.,4600,EUR,Engineering,,Payment processing October,,DE,FALSE
+2025-10-20,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license October,2026-03-31,DE,FALSE
+2025-10-22,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure licenses October - expanded seats,2026-10-31,DE,FALSE
+2025-10-24,Snowflake Inc.,13400,EUR,Data & Analytics,PO-2025-009,Data warehouse October,2025-12-31,DE,FALSE
+2025-10-27,Twilio Inc.,7500,EUR,Product,PO-2025-010,SMS API October,2025-09-30,DE,FALSE
+2025-10-29,KPMG AG Wirtschaftsprüfungsgesellschaft,24000,EUR,Finance,PO-2025-007,Audit Q4,2025-12-31,DE,FALSE
+2025-10-31,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining October,2026-04-30,DE,TRUE
+2025-11-03,Amazon Web Services,63100,EUR,Engineering,PO-2025-018,Cloud infrastructure November,2026-12-31,DE,FALSE
+2025-11-05,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office November,2025-12-31,DE,TRUE
+2025-11-07,Anthropic PBC,23800,EUR,Product,,Claude API November - still no PO raised,,DE,TRUE
+2025-11-10,Google Cloud Platform,37500,EUR,Engineering,PO-2025-019,BigQuery November,2026-12-31,DE,FALSE
+2025-11-12,HubSpot Inc.,7200,EUR,Marketing,,HubSpot November - no PO,,DE,FALSE
+2025-11-14,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform November,2025-12-31,DE,TRUE
+2025-11-17,LinkedIn Ireland Unlimited,5600,EUR,HR,,LinkedIn Recruiter November - no PO,,DE,FALSE
 2025-11-19,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure licenses November,2026-10-31,DE,FALSE
-2025-11-21,SAP,32000,EUR,Finance,PO-2025-011,SAP license November,2026-03-31,DE,FALSE
-2025-11-24,Deloitte,19500,EUR,Finance,PO-2025-013,Tax advisory November,2025-12-31,DE,FALSE
-2025-11-26,Datadog,8900,EUR,Engineering,PO-2025-012,Monitoring November,2025-12-31,DE,FALSE
-2025-11-28,Lufthansa,4100,EUR,Management,,Year-end executive travel,,DE,FALSE
-2025-12-01,AWS,64800,EUR,Engineering,PO-2025-018,Cloud infrastructure December,2026-12-31,DE,FALSE
-2025-12-03,WeWork,18000,EUR,Facilities,PO-2025-004,Berlin office December,2025-12-31,DE,TRUE
-2025-12-05,Google Cloud,38200,EUR,Engineering,PO-2025-019,BigQuery December,2026-12-31,DE,FALSE
-2025-12-08,Salesforce,14800,EUR,Sales,,CRM Q4 final - no PO all year,2026-03-31,DE,FALSE
-2025-12-10,OpenAI,19800,EUR,Product,,GPT-4 API December - no contract,,DE,FALSE
-2025-12-12,Personio,8200,EUR,HR,PO-2025-003,HR software December,2025-12-31,DE,TRUE
-2025-12-15,SAP,32000,EUR,Finance,PO-2025-011,SAP license December,2026-03-31,DE,FALSE
+2025-11-21,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license November,2026-03-31,DE,FALSE
+2025-11-24,Deloitte GmbH Wirtschaftsprüfungsgesellschaft,19500,EUR,Finance,PO-2025-015,Tax advisory November,2025-12-31,DE,FALSE
+2025-11-26,Datadog Inc.,8900,EUR,Engineering,PO-2025-008,Monitoring November,2025-12-31,DE,FALSE
+2025-11-28,Lufthansa AG,4100,EUR,Management,,Year-end executive travel,,DE,FALSE
+2025-12-01,Amazon Web Services,64800,EUR,Engineering,PO-2025-018,Cloud infrastructure December,2026-12-31,DE,FALSE
+2025-12-03,WeWork Germany GmbH,18000,EUR,Facilities,PO-2025-005,Berlin Mitte office December,2025-12-31,DE,TRUE
+2025-12-05,Google Cloud Platform,38200,EUR,Engineering,PO-2025-019,BigQuery December,2026-12-31,DE,FALSE
+2025-12-08,Salesforce,14800,EUR,Sales,,CRM Q4 final - no PO entire year,2026-03-31,DE,FALSE
+2025-12-10,OpenAI Inc.,19800,EUR,Product,,GPT-4 API December - no contract,,DE,TRUE
+2025-12-12,Personio GmbH,8200,EUR,HR,PO-2025-004,HR platform December,2025-12-31,DE,TRUE
+2025-12-15,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license December,2026-03-31,DE,FALSE
 2025-12-17,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure licenses December,2026-10-31,DE,FALSE
-2025-12-19,Stripe,5100,EUR,Engineering,,Payment processing December,,DE,FALSE
-2025-12-22,KPMG,24000,EUR,Finance,PO-2025-007,Audit year-end final,2025-12-31,DE,FALSE
-2025-12-23,Twilio,7800,EUR,Product,PO-2025-008,SMS API December,2025-09-30,DE,FALSE
-2025-12-29,Snowflake,13400,EUR,Data,PO-2025-009,Data warehouse December,2025-12-31,DE,FALSE
-2025-12-30,Celonis,15200,EUR,Operations,PO-2025-015,Process mining December,2026-04-30,DE,TRUE
-2025-12-31,McKinsey,45000,EUR,Strategy,PO-2025-017,Year-end strategy review,2025-12-31,DE,TRUE
-2026-01-06,AWS,66200,EUR,Engineering,PO-2025-018,Cloud infrastructure Jan 2026,2026-12-31,DE,FALSE
-2026-01-08,WeWork,19500,EUR,Facilities,PO-2026-001,Berlin office Jan 2026 - new rate,2026-12-31,DE,TRUE
-2026-01-10,Google Cloud,39400,EUR,Engineering,PO-2025-019,BigQuery Jan 2026,2026-12-31,DE,FALSE
-2026-01-13,Anthropic,23800,EUR,Product,,Claude API Jan 2026 - no PO still,,DE,TRUE
-2026-01-15,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure Jan 2026,2026-10-31,DE,FALSE
-2026-01-17,Personio,8200,EUR,HR,PO-2026-002,HR software Jan 2026,2026-12-31,DE,TRUE
-2026-01-20,Datadog,9800,EUR,Engineering,PO-2026-003,Monitoring Jan 2026 - price increase,2026-12-31,DE,FALSE
-2026-01-22,SAP,32000,EUR,Finance,PO-2025-011,SAP license Jan 2026,2026-03-31,DE,FALSE
+2025-12-19,Stripe Inc.,5100,EUR,Engineering,,Payment processing December,,DE,FALSE
+2025-12-22,KPMG AG Wirtschaftsprüfungsgesellschaft,24000,EUR,Finance,PO-2025-007,Audit year-end final,2025-12-31,DE,FALSE
+2025-12-23,Twilio Inc.,7800,EUR,Product,PO-2025-010,SMS API December,2025-09-30,DE,FALSE
+2025-12-29,Snowflake Inc.,13400,EUR,Data & Analytics,PO-2025-009,Data warehouse December,2025-12-31,DE,FALSE
+2025-12-30,Celonis SE,15200,EUR,Operations,PO-2025-012,Process mining December,2026-04-30,DE,TRUE
+2025-12-31,McKinsey & Company,45000,EUR,Strategy,PO-2025-017,Year-end strategy review - final milestone,2025-12-31,DE,TRUE
+2026-01-06,Amazon Web Services,66200,EUR,Engineering,PO-2025-018,Cloud infrastructure January 2026,2026-12-31,DE,FALSE
+2026-01-08,WeWork Germany GmbH,19500,EUR,Facilities,PO-2026-001,Berlin Mitte office Jan 2026 - new rate card,2026-12-31,DE,TRUE
+2026-01-10,Google Cloud Platform,39400,EUR,Engineering,PO-2025-019,BigQuery January 2026,2026-12-31,DE,FALSE
+2026-01-13,Anthropic PBC,26100,EUR,Product,,Claude API Jan 2026 - still no PO,,DE,TRUE
+2026-01-15,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure January 2026,2026-10-31,DE,FALSE
+2026-01-17,Personio GmbH,8200,EUR,HR,PO-2026-002,HR platform January 2026,2026-12-31,DE,TRUE
+2026-01-20,Datadog Inc.,9800,EUR,Engineering,PO-2026-003,Monitoring Jan 2026 - price increase 10%,2026-12-31,DE,FALSE
+2026-01-22,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license January 2026,2026-03-31,DE,FALSE
 2026-01-24,Salesforce,16200,EUR,Sales,,CRM Jan 2026 - no PO raised again,2026-03-31,DE,FALSE
-2026-01-27,HubSpot,7200,EUR,Marketing,,HubSpot Jan 2026 - no PO,,DE,FALSE
-2026-01-29,Stripe,4800,EUR,Engineering,,Payment processing Jan 2026,,DE,FALSE
-2026-02-02,AWS,68400,EUR,Engineering,PO-2025-018,Cloud infrastructure Feb 2026,2026-12-31,DE,FALSE
-2026-02-04,WeWork,19500,EUR,Facilities,PO-2026-001,Berlin office Feb 2026,2026-12-31,DE,TRUE
-2026-02-06,Google Cloud,40100,EUR,Engineering,PO-2025-019,BigQuery Feb 2026,2026-12-31,DE,FALSE
-2026-02-09,OpenAI,22400,EUR,Product,,GPT-4 API Feb 2026 - no contract,,DE,FALSE
-2026-02-11,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure Feb 2026,2026-10-31,DE,FALSE
-2026-02-13,Snowflake,14200,EUR,Data,PO-2026-004,Data warehouse Feb 2026,2026-12-31,DE,FALSE
-2026-02-17,Personio,8200,EUR,HR,PO-2026-002,HR software Feb 2026,2026-12-31,DE,TRUE
-2026-02-19,Deloitte,21000,EUR,Finance,PO-2026-005,Tax advisory Feb 2026,2026-12-31,DE,FALSE
-2026-02-21,Twilio,8100,EUR,Product,PO-2026-006,SMS API Feb 2026,2026-12-31,DE,FALSE
-2026-02-24,Datadog,9800,EUR,Engineering,PO-2026-003,Monitoring Feb 2026,2026-12-31,DE,FALSE
-2026-02-26,SAP,32000,EUR,Finance,PO-2025-011,SAP license Feb 2026,2026-03-31,DE,FALSE
-2026-02-28,Lufthansa,3400,EUR,Management,,Business travel Feb 2026,,DE,FALSE
-2026-03-02,AWS,69800,EUR,Engineering,PO-2025-018,Cloud infrastructure Mar 2026,2026-12-31,DE,FALSE
-2026-03-04,WeWork,19500,EUR,Facilities,PO-2026-001,Berlin office Mar 2026,2026-12-31,DE,TRUE
-2026-03-06,Anthropic,26100,EUR,Product,,Claude API Mar 2026 - no PO,,DE,TRUE
-2026-03-09,Google Cloud,41300,EUR,Engineering,PO-2025-019,BigQuery Mar 2026,2026-12-31,DE,FALSE
-2026-03-11,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure Mar 2026,2026-10-31,DE,FALSE
-2026-03-13,Salesforce,16200,EUR,Sales,,CRM Mar 2026 - no PO still,2026-03-31,DE,FALSE
-2026-03-16,Personio,8200,EUR,HR,PO-2026-002,HR software Mar 2026,2026-12-31,DE,TRUE
-2026-03-18,Celonis,16800,EUR,Operations,PO-2026-007,Process mining Mar 2026 - new rate,2027-03-31,DE,TRUE
-2026-03-20,KPMG,26000,EUR,Finance,PO-2026-008,Audit Q1 2026,2026-12-31,DE,FALSE
-2026-03-23,Datadog,9800,EUR,Engineering,PO-2026-003,Monitoring Mar 2026,2026-12-31,DE,FALSE
-2026-03-25,Snowflake,14200,EUR,Data,PO-2026-004,Data warehouse Mar 2026,2026-12-31,DE,FALSE
-2026-03-27,SAP,32000,EUR,Finance,PO-2025-011,SAP license Mar 2026,2026-03-31,DE,FALSE
-2026-03-31,HubSpot,7800,EUR,Marketing,,HubSpot Mar 2026 - no PO,,DE,FALSE
-2026-04-01,AWS,71200,EUR,Engineering,PO-2025-018,Cloud infrastructure Apr 2026,2026-12-31,DE,FALSE
-2026-04-03,WeWork,19500,EUR,Facilities,PO-2026-001,Berlin office Apr 2026,2026-12-31,DE,TRUE
-2026-04-07,Google Cloud,42500,EUR,Engineering,PO-2025-019,BigQuery Apr 2026,2026-12-31,DE,FALSE
-2026-04-09,OpenAI,24600,EUR,Product,,GPT-4 API Apr 2026 - no contract,,DE,FALSE
-2026-04-11,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure Apr 2026,2026-10-31,DE,FALSE
-2026-04-14,Personio,8200,EUR,HR,PO-2026-002,HR software Apr 2026,2026-12-31,DE,TRUE
-2026-04-16,Anthropic,28400,EUR,Product,,Claude API Apr 2026 - no PO,,DE,TRUE
-2026-04-18,Twilio,8100,EUR,Product,PO-2026-006,SMS API Apr 2026,2026-12-31,DE,FALSE
-2026-04-21,Datadog,9800,EUR,Engineering,PO-2026-003,Monitoring Apr 2026,2026-12-31,DE,FALSE
-2026-04-23,SAP,32000,EUR,Finance,PO-2026-009,SAP license Apr 2026 - renewed,2027-03-31,DE,FALSE
-2026-04-25,LinkedIn,6200,EUR,HR,,LinkedIn Recruiter Apr 2026 - no PO,,DE,FALSE
-2026-04-28,Deloitte,21000,EUR,Finance,PO-2026-005,Tax advisory Apr 2026,2026-12-31,DE,FALSE
-2026-04-30,Stripe,5200,EUR,Engineering,,Payment processing Apr 2026,,DE,FALSE
+2026-01-27,HubSpot Inc.,7200,EUR,Marketing,,HubSpot Jan 2026 - no PO raised,,DE,FALSE
+2026-01-29,Stripe Inc.,4800,EUR,Engineering,,Payment processing January 2026,,DE,FALSE
+2026-02-02,Amazon Web Services,68400,EUR,Engineering,PO-2025-018,Cloud infrastructure February 2026,2026-12-31,DE,FALSE
+2026-02-04,WeWork Germany GmbH,19500,EUR,Facilities,PO-2026-001,Berlin Mitte office February 2026,2026-12-31,DE,TRUE
+2026-02-06,Google Cloud Platform,40100,EUR,Engineering,PO-2025-019,BigQuery February 2026,2026-12-31,DE,FALSE
+2026-02-09,OpenAI Inc.,22400,EUR,Product,,GPT-4 API Feb 2026 - no contract,,DE,TRUE
+2026-02-11,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure February 2026,2026-10-31,DE,FALSE
+2026-02-13,Snowflake Inc.,14200,EUR,Data & Analytics,PO-2026-004,Data warehouse Feb 2026 - expanded,2026-12-31,DE,FALSE
+2026-02-17,Personio GmbH,8200,EUR,HR,PO-2026-002,HR platform February 2026,2026-12-31,DE,TRUE
+2026-02-19,Deloitte GmbH Wirtschaftsprüfungsgesellschaft,21000,EUR,Finance,PO-2026-005,Tax advisory February 2026,2026-12-31,DE,FALSE
+2026-02-21,Twilio Inc.,8100,EUR,Product,PO-2026-006,SMS API February 2026,2026-12-31,DE,FALSE
+2026-02-24,Datadog Inc.,9800,EUR,Engineering,PO-2026-003,Monitoring February 2026,2026-12-31,DE,FALSE
+2026-02-26,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license February 2026,2026-03-31,DE,FALSE
+2026-02-28,Lufthansa AG,3400,EUR,Management,,Business travel February 2026,,DE,FALSE
+2026-03-02,Amazon Web Services,69800,EUR,Engineering,PO-2025-018,Cloud infrastructure March 2026,2026-12-31,DE,FALSE
+2026-03-04,WeWork Germany GmbH,19500,EUR,Facilities,PO-2026-001,Berlin Mitte office March 2026,2026-12-31,DE,TRUE
+2026-03-06,Anthropic PBC,28400,EUR,Product,,Claude API March 2026 - no PO,,DE,TRUE
+2026-03-09,Google Cloud Platform,41300,EUR,Engineering,PO-2025-019,BigQuery March 2026,2026-12-31,DE,FALSE
+2026-03-11,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure March 2026,2026-10-31,DE,FALSE
+2026-03-13,Salesforce,16200,EUR,Sales,,CRM March 2026 - no PO raised,2026-03-31,DE,FALSE
+2026-03-16,Personio GmbH,8200,EUR,HR,PO-2026-002,HR platform March 2026,2026-12-31,DE,TRUE
+2026-03-18,Celonis SE,16800,EUR,Operations,PO-2026-007,Process mining March 2026 - renewed at new rate,2027-03-31,DE,TRUE
+2026-03-20,KPMG AG Wirtschaftsprüfungsgesellschaft,26000,EUR,Finance,PO-2026-008,Audit Q1 2026,2026-12-31,DE,FALSE
+2026-03-23,Datadog Inc.,9800,EUR,Engineering,PO-2026-003,Monitoring March 2026,2026-12-31,DE,FALSE
+2026-03-25,Snowflake Inc.,14200,EUR,Data & Analytics,PO-2026-004,Data warehouse March 2026,2026-12-31,DE,FALSE
+2026-03-27,SAP SE,32000,EUR,Finance,PO-2025-011,SAP license March 2026 - final quarter,2026-03-31,DE,FALSE
+2026-03-31,HubSpot Inc.,7800,EUR,Marketing,,HubSpot March 2026 - no PO raised,,DE,FALSE
+2026-04-01,Amazon Web Services,71200,EUR,Engineering,PO-2025-018,Cloud infrastructure April 2026,2026-12-31,DE,FALSE
+2026-04-03,WeWork Germany GmbH,19500,EUR,Facilities,PO-2026-001,Berlin Mitte office April 2026,2026-12-31,DE,TRUE
+2026-04-07,Google Cloud Platform,42500,EUR,Engineering,PO-2025-019,BigQuery April 2026,2026-12-31,DE,FALSE
+2026-04-09,OpenAI Inc.,24600,EUR,Product,,GPT-4 API April 2026 - no contract,,DE,TRUE
+2026-04-11,Microsoft Azure,23800,EUR,Engineering,PO-2025-020,Azure April 2026,2026-10-31,DE,FALSE
+2026-04-14,Personio GmbH,8200,EUR,HR,PO-2026-002,HR platform April 2026,2026-12-31,DE,TRUE
+2026-04-16,Anthropic PBC,31200,EUR,Product,,Claude API April 2026 - no PO,,DE,TRUE
+2026-04-18,Twilio Inc.,8100,EUR,Product,PO-2026-006,SMS API April 2026,2026-12-31,DE,FALSE
+2026-04-21,Datadog Inc.,9800,EUR,Engineering,PO-2026-003,Monitoring April 2026,2026-12-31,DE,FALSE
+2026-04-23,SAP SE,32000,EUR,Finance,PO-2026-009,SAP S/4HANA renewal - new 2yr contract,2028-03-31,DE,FALSE
+2026-04-25,LinkedIn Ireland Unlimited,6200,EUR,HR,,LinkedIn Recruiter April 2026 - no PO raised,,DE,FALSE
+2026-04-28,Deloitte GmbH Wirtschaftsprüfungsgesellschaft,21000,EUR,Finance,PO-2026-005,Tax advisory April 2026,2026-12-31,DE,FALSE
+2026-04-30,Stripe Inc.,5200,EUR,Engineering,,Payment processing April 2026,,DE,FALSE
