@@ -270,9 +270,12 @@ def full_cleanup(df: pd.DataFrame, spend_col: str = None, date_col: str = None,
         df = convert_to_eur(df, spend_col=active_spend, currency_col=currency_col)
         report["fx_conversion"] = True
 
-    # 4. Fix dates
+    # 4. Fix dates (exclude spend-related columns even if they match date keywords)
+    _spend_cols = {"spend", "spend_eur", "amount", "total", "cost", "betrag", "fx_rate"}
     date_candidates = [date_col] if date_col else [
-        c for c in df.columns if any(k in c for k in ["date", "datum", "end", "expiry"])
+        c for c in df.columns
+        if any(k in c for k in ["date", "datum", "end", "expiry"])
+        and c not in _spend_cols
     ]
     for col in date_candidates:
         if col in df.columns:

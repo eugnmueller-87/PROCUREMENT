@@ -229,7 +229,7 @@ Format:
 JSON:"""
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2000,  # enough for 100 vendors
         messages=[{"role": "user", "content": prompt}]
     )
@@ -414,6 +414,7 @@ def real_estate_by_location(df: pd.DataFrame,
 
     # Fill missing locations with "Unknown"
     re_df["office_location"] = re_df["office_location"].fillna("Unknown")
+    re_df[spend_col] = pd.to_numeric(re_df[spend_col], errors="coerce").fillna(0)
 
     summary = re_df.groupby("office_location").agg(
         total_spend=(spend_col, "sum"),
