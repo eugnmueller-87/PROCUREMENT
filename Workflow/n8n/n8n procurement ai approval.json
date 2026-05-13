@@ -1,0 +1,200 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "3a280201-c66c-4029-88ec-2b50e0f63bfd",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        -112
+      ],
+      "id": "fa18210d-420b-482f-a649-4f6c843cf0a8",
+      "name": "Webhook",
+      "webhookId": "3a280201-c66c-4029-88ec-2b50e0f63bfd"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a procurement analyst. Analyze this purchase request and return JSON only, no markdown, no backticks:\n\nRequester: {{ $json.body.requester }}\nVendor: {{ $json.body.vendor }}\nAmount: {{ $json.body.amount }}\nCategory: {{ $json.body.category }}\nDescription: {{ $json.body.description }}\n\nReturn exactly this JSON:\n{\n  \"risk_level\": \"LOW or MEDIUM or HIGH\",\n  \"risk_reason\": \"one sentence why\",\n  \"suggested_action\": \"auto-approve or manager review or VP approval\",\n  \"summary\": \"2 sentence summary for approver\"\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -112
+      ],
+      "id": "6721cfe3-69e8-4580-83aa-ea29fa083551",
+      "name": "Message a model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "2wWtN7yDEY8aQctg",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "LOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "45d07899-2e8d-4ac6-9692-ed8ac04bea09"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f3849b0a-9277-49a2-baf4-de610491f877",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "MEDIUM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e4af4d9c-1ae0-48d5-99d5-7ca2fdcba257",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "HIGH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        -128
+      ],
+      "id": "cf80f21b-a525-48bf-a756-cd0d6b009e7e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "raw_text = _items[0]['json']['content'][0]['text']\n\nimport re\ncleaned = re.sub(r'```json|```', '', raw_text).strip()\n\nimport json\nparsed = json.loads(cleaned)\n\nreturn [{\n  'json': {\n    'risk_level': parsed['risk_level'],\n    'risk_reason': parsed['risk_reason'],\n    'suggested_action': parsed['suggested_action'],\n    'summary': parsed['summary']\n  }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -112
+      ],
+      "id": "18d41ff0-5e21-4ca0-8cc0-3f97f0f654e4",
+      "name": "Code in Python"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in Python",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "35cb1588-5420-4e34-b6db-f5771a400a5b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e5ed8bcf392b52a9baf37e1c53638a30b787922e7637c7b116b93d22c7d63e87"
+  },
+  "id": "F69tE5k5OoMHaFWN",
+  "tags": []
+}
