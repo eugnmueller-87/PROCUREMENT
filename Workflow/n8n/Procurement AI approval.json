@@ -1,0 +1,364 @@
+{
+  "name": "Procurement AI approval",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "3a280201-c66c-4029-88ec-2b50e0f63bfd",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -896,
+        -176
+      ],
+      "id": "fa18210d-420b-482f-a649-4f6c843cf0a8",
+      "name": "Webhook",
+      "webhookId": "3a280201-c66c-4029-88ec-2b50e0f63bfd"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a procurement analyst. Analyze this purchase request and return JSON only, no markdown, no backticks:\n\nRequester: {{ $json.body.requester }}\nVendor: {{ $json.body.vendor }}\nAmount: {{ $json.body.amount }}\nCategory: {{ $json.body.category }}\nDescription: {{ $json.body.description }}\n\nReturn exactly this JSON:\n{\n  \"risk_level\": \"LOW or MEDIUM or HIGH\",\n  \"risk_reason\": \"one sentence why\",\n  \"suggested_action\": \"auto-approve or manager review or VP approval\",\n  \"summary\": \"2 sentence summary for approver\"\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        -176
+      ],
+      "id": "6721cfe3-69e8-4580-83aa-ea29fa083551",
+      "name": "Message a model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "2wWtN7yDEY8aQctg",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "LOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "45d07899-2e8d-4ac6-9692-ed8ac04bea09"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f3849b0a-9277-49a2-baf4-de610491f877",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "MEDIUM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e4af4d9c-1ae0-48d5-99d5-7ca2fdcba257",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "HIGH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        -192
+      ],
+      "id": "cf80f21b-a525-48bf-a756-cd0d6b009e7e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "raw_text = _items[0]['json']['content'][0]['text']\n\nimport re\ncleaned = re.sub(r'```json|```', '', raw_text).strip()\n\nimport json\nparsed = json.loads(cleaned)\n\nreturn [{\n  'json': {\n    'risk_level': parsed['risk_level'],\n    'risk_reason': parsed['risk_reason'],\n    'suggested_action': parsed['suggested_action'],\n    'summary': parsed['summary']\n  }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        -176
+      ],
+      "id": "18d41ff0-5e21-4ca0-8cc0-3f97f0f654e4",
+      "name": "Code in Python"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "64397f02-1beb-4976-a9c0-6d333a83cd4e",
+              "name": "approval_status",
+              "value": "auto-approved",
+              "type": "string"
+            },
+            {
+              "id": "e652f34f-4c2f-482e-981a-89bfeb459a7f",
+              "name": "message",
+              "value": "✅ Low risk - auto approved by system",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -48,
+        -336
+      ],
+      "id": "51c69b48-7aff-4eac-92fd-d0c7196b4296",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7e617ade-7963-44e1-a0aa-e54c07743159",
+              "leftValue": "={{ $json.approval_status }}",
+              "rightValue": "auto-approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        144,
+        -336
+      ],
+      "id": "58f83019-601d-44d6-9425-010a886fa9d4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "https://api.exchangerate-api.com/v4/latest/EUR",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        368,
+        -400
+      ],
+      "id": "f49edc63-ab74-4f18-9ca8-21c8eaa86ab2",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        -192
+      ],
+      "id": "60f55c5d-380a-4e30-915b-67893bb76946",
+      "name": "Wait",
+      "webhookId": "c3f25480-7e5c-44c6-8263-074ca270e627"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        576,
+        -192
+      ],
+      "id": "f997a707-bde2-473c-86f2-e40157e6f8d0",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -16
+      ],
+      "id": "0d6df69f-f068-46f3-9c06-3dfe8ae399c1",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in Python",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "79daea66-8335-4837-9e8a-ccca0af753f2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e5ed8bcf392b52a9baf37e1c53638a30b787922e7637c7b116b93d22c7d63e87"
+  },
+  "id": "F69tE5k5OoMHaFWN",
+  "tags": []
+}
