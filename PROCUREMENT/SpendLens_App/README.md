@@ -219,7 +219,85 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 
 ---
 
-## Project Status
+## Product Roadmap
+
+The table below maps the full procurement AI pipeline across 7 layers — what is live, what is the highest priority to build next, and what is optional.
+
+### Layer 1 · Data Ingestion & Integration
+
+| Component | Status | Notes |
+|---|---|---|
+| SpendLens upload pipeline (CSV / Excel) | ✅ Live | Fuzzy column mapping, German format support, dedup |
+| ERP Live Connector (SAP S/4HANA, Ariba API) | 🔴 High priority | Eliminates manual exports — real-time spend feed |
+| P-Card / Invoice OCR (unstructured docs) | ⬜ Optional | |
+
+### Layer 2 · Spend Analytics & Intelligence
+
+| Component | Status | Notes |
+|---|---|---|
+| Spend classification — 5-stage AI pipeline | ✅ Live | 11 categories, cached, ~$0.05/1000 vendors |
+| Hermes market intelligence | ✅ Live | 590 suppliers, 17 procurement categories, Redis |
+| Savings Tracker — budget vs. actual, variance | 🔴 High priority | CFOs expect this; gap between intent and result |
+
+### Layer 3 · Sourcing & Supplier Management
+
+| Component | Status | Notes |
+|---|---|---|
+| Triage Agent — RFQ/RFP generation, 5-tier routing | ✅ Live | Autonomous procurement request handling |
+| Hades Due Diligence — 6 parallel DD nodes | ✅ Live | Sanctions, LkSG, ESG, Registry, News, Hermes |
+| Supplier Performance Scorecard — SLA tracking | 🔴 High priority | Closes the loop from onboarding to performance |
+
+### Layer 4 · Contract Lifecycle Management (CLM)
+
+| Component | Status | Notes |
+|---|---|---|
+| Contract Extraction — clause AI, risk flagging | 🔴 High priority | PDF contracts → structured data, risk highlighted |
+| Renewal Monitor — expiry alerts, obligations | 🔴 High priority | Prevents silent auto-renewals and missed exits |
+| Negotiation Copilot — playbook AI, redlining | ⬜ Optional | |
+
+### Layer 5 · Purchase-to-Pay (P2P)
+
+| Component | Status | Notes |
+|---|---|---|
+| PR Chatbot / Copilot — guided buying, catalog | 🔴 High priority | Self-service purchasing, reduces off-contract buys |
+| Invoice Matching — 3-way match, anomaly AI | 🔴 High priority | Catches duplicate payments and pricing errors |
+| Maverick Spend Alerting — off-contract detection | ⬜ Optional | Partial coverage already via flag engine |
+
+### Layer 6 · Compliance, ESG & Risk
+
+| Component | Status | Notes |
+|---|---|---|
+| Hades Risk Engine — OFAC, LkSG, ESG, NCP | ✅ Live | Integrated into SpendLens Supplier DD tab |
+| Scope 3 / CO₂ Tracker — emission per € spend | 🔴 High priority | CSRD mandatory reporting requirement from 2025 |
+| Supplier Diversity Scorecard — SME, WBE % | ⬜ Optional | |
+
+### Layer 7 · Reporting & CPO Dashboard
+
+| Component | Status | Notes |
+|---|---|---|
+| CFO Excel Export | ✅ Live | SpendLens built-in, multi-tab workbook |
+| Category Strategy slide deck (HTML export) | ✅ Live | 10 slides, Kraljic + 6 frameworks |
+| CPO Live Dashboard — real-time KPIs, RAG status | 🔴 High priority | Executive view across all 7 layers |
+| Natural Language Query — "Show me Q1 IT spend" | ⬜ Optional | |
+
+---
+
+### Additional Planned Capabilities
+
+| Component | Status |
+|---|---|
+| ECB FX Rates — auto-convert multi-currency spend to EUR | 🔨 In progress |
+| OpenCorporates — supplier legal registration enrichment | 🔨 In progress |
+| Mobile — Telegram bot (signal push, scan on demand) | 📋 Planned |
+| Mobile — Slack bot (weekly brief, scan on demand) | 📋 Planned |
+| Quandl / Nasdaq Data Link — commodity price feeds | 📋 Planned |
+| Creditsafe / D&B — supplier financial health & insolvency | 📋 Planned |
+| Multi-client support with per-client isolation | 📋 Planned |
+| Enterprise security — SSO, RBAC, audit log, encryption | 📋 Planned |
+
+---
+
+## Current Build Status
 
 | Component | Status |
 |-----------|--------|
@@ -243,23 +321,18 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | Icarus — Parallel fetch & batch analysis (5x faster) | ✅ Live |
 | Icarus — Signals load on dashboard startup | ✅ Live |
 | Icarus — Grok live search (real-time X + web signals) | ✅ Live |
-| Icarus — ICARUS AI data interpretation per chart | ✅ Live |
+| Icarus — AI data interpretation per chart | ✅ Live |
 | Icarus — Period-aware spend insight bullets | ✅ Live |
 | Icarus — Feedback learning loop | 🔨 In progress |
-| Compliance Scorecard tab — EcoVadis-style cards, ABC tiers, inline editing | ✅ Live |
+| Compliance Scorecard — EcoVadis-style cards, ABC tiers, inline editing | ✅ Live |
+| Hades Supplier DD — 6-node LangGraph agent | ✅ Live |
+| Hades — OFAC / UN SC sanctions check | ✅ Live |
+| Hades — LkSG / CSDDD compliance signals | ✅ Live |
+| Hades — ESG & labour signals | ✅ Live |
+| Hades — Company registry lookup | ✅ Live |
+| Hades — Hermes watchlist registration | ✅ Live |
 | Category Strategy — 7 AI frameworks (Kraljic, PESTEL, SWOT, Porter's, TCO, Levers, Recommendation) | ✅ Live |
-| Category Strategy — HTML slide deck export (10 slides, SpendLens branded) | ✅ Live |
-| Spend Variance Analysis | 📋 Planned |
-| Supplier Risk Score | 📋 Planned |
-| Spend Forecast (Q+1) | 📋 Planned |
-| Multi-client support | 📋 Planned |
-| Mobile — Telegram bot (signal push, scan on demand) | 📋 Planned |
-| Mobile — Slack bot (signal push, weekly brief, scan on demand) | 📋 Planned |
-| ECB FX Rates — auto-convert multi-currency spend to EUR | 🔨 Planned |
-| OpenCorporates — supplier legal registration enrichment | 🔨 Planned |
-| Quandl / Nasdaq Data Link — commodity price feeds for cost justification | 🔨 Planned |
-| Creditsafe / D&B — supplier financial health & insolvency risk | 🔨 Planned |
-| Enterprise security — HTTPS/TLS, SSO (Azure AD / Okta / Google), encryption at rest, audit logging, RBAC | 🔨 Planned |
+| Category Strategy — HTML slide deck export (10 slides, branded) | ✅ Live |
 
 ---
 
