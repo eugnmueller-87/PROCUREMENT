@@ -277,6 +277,50 @@ def init_database(client_name: str = "default") -> None:
 
     CREATE INDEX IF NOT EXISTS idx_sp_client ON supplier_profiles(client_name);
 
+
+    -- ── TABLE 7: CONTRACTS (Lex CLM) ─────────────────────────────────────────
+    -- One row per scanned contract document.
+    -- Stores extracted clauses, risk assessment, and raw Claude JSON.
+    -- Links to vendors table via vendor_name for cross-module queries.
+
+    CREATE TABLE IF NOT EXISTS contracts (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        scanned_at              TEXT NOT NULL,          -- ISO timestamp of scan
+        filename                TEXT NOT NULL,          -- original filename
+        vendor_name             TEXT,                   -- linked vendor (may be NULL if unknown)
+        contract_type           TEXT,                   -- MSA / SaaS / Freelancer / NDA / Other
+
+        -- Extracted clauses
+        start_date              TEXT,                   -- contract start date
+        end_date                TEXT,                   -- contract end date / expiry
+        notice_period_days      INTEGER,                -- days notice required to terminate
+        auto_renewal            INTEGER,                -- 0/1 — does it auto-renew?
+        auto_renewal_period     TEXT,                   -- e.g. "12 months", "1 year"
+        penalty_cap_pct         REAL,                   -- penalty/Pönale cap as % of contract value
+        liability_cap           TEXT,                   -- liability limitation clause text
+        price_adjustment        TEXT,                   -- price escalation / CPI clause text
+        jurisdiction            TEXT,                   -- governing law / court jurisdiction
+        sla_terms               TEXT,                   -- SLA obligations summary
+        payment_terms           TEXT,                   -- payment terms (e.g. Net 30)
+        termination_rights      TEXT,                   -- termination for convenience clause
+
+        -- Missing clauses (comma-separated list)
+        missing_clauses         TEXT,
+
+        -- Risk assessment
+        risk_score              REAL,                   -- 1-10 overall contract risk
+        risk_level              TEXT,                   -- Low / Medium / High / Critical
+        risk_summary            TEXT,                   -- one-paragraph risk narrative
+        required_actions        TEXT,                   -- JSON list of required actions
+        clause_flags            TEXT,                   -- JSON dict: clause -> flag color
+
+        -- Raw Claude output (for audit/replay)
+        claude_raw              TEXT                    -- full JSON from Claude extraction
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_contracts_vendor ON contracts(vendor_name);
+    CREATE INDEX IF NOT EXISTS idx_contracts_end ON contracts(end_date);
+
     """)
 
     conn.commit()
@@ -297,6 +341,14 @@ def init_database(client_name: str = "default") -> None:
         "ALTER TABLE vendors ADD COLUMN hades_lksg_signal TEXT",
         "ALTER TABLE vendors ADD COLUMN hades_next_steps TEXT",
         "ALTER TABLE vendors ADD COLUMN hades_report_date TEXT",
+        # Lex CLM fields on vendors table
+        "ALTER TABLE vendors ADD COLUMN lex_contract_id INTEGER",
+        "ALTER TABLE vendors ADD COLUMN lex_contract_risk_score REAL",
+        "ALTER TABLE vendors ADD COLUMN lex_contract_risk_level TEXT",
+        "ALTER TABLE vendors ADD COLUMN lex_contract_end TEXT",
+        "ALTER TABLE vendors ADD COLUMN lex_notice_period_days INTEGER",
+        "ALTER TABLE vendors ADD COLUMN lex_auto_renewal INTEGER",
+        "ALTER TABLE vendors ADD COLUMN lex_scan_date TEXT",
     ]
     for sql in migrations:
         try:
@@ -306,7 +358,7 @@ def init_database(client_name: str = "default") -> None:
     conn.commit()
     conn.close()
 
-    print(f"  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches, supplier_profiles")
+    print(f"  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches, supplier_profiles, contracts")
     print(f"── Database ready ✅ ────────────────────────────────────\n")
 
 
@@ -728,6 +780,25 @@ def get_real_estate_by_location(conn: sqlite3.Connection) -> pd.DataFrame:
         ORDER BY total_spend DESC
     """
     return pd.read_sql_query(query, conn)
+
+
+def get_contracts(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Return all scanned contracts ordered by scan date."""
+    return pd.read_sql_query(
+        "SELECT * FROM contracts ORDER BY scanned_at DESC", conn
+    )
+
+
+def get_expiring_contracts(conn: sqlite3.Connection, days: int = 90) -> pd.DataFrame:
+    """Return contracts expiring within the next N days."""
+    return pd.read_sql_query("""
+        SELECT id, vendor_name, contract_type, end_date, notice_period_days,
+               risk_score, risk_level, filename
+        FROM contracts
+        WHERE end_date IS NOT NULL
+          AND date(end_date) BETWEEN date('now') AND date('now', ? || ' days')
+        ORDER BY end_date ASC
+    """, conn, params=(f"+{days}",))
 
 
 # ── QUICK TEST ─────────────────────────────────────────────────────────────────

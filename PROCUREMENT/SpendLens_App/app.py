@@ -2740,7 +2740,10 @@ from category_strategy_ui import CategoryStrategyPanel
 cat_strategy_panel = CategoryStrategyPanel(client_name="default")
 
 from hades_ui import HadesPanel
+from lex_ui import LexPanel
+
 hades_panel = HadesPanel(client_name="default")
+lex_panel   = LexPanel(client_name="default")
 
 tabs = pn.Tabs(
     ("Dashboard", main_tab),
@@ -2749,12 +2752,13 @@ tabs = pn.Tabs(
     ("🪶 ICARUS AI", icarus_panel.view()),
     ("📊 Category Strategy", cat_strategy_panel.view()),
     ("⚖️ Supplier DD", hades_panel.view()),
+    ("📄 CLM", lex_panel.view()),
     sizing_mode="stretch_width",
 )
 
-# Hide sidebar on Icarus (3), Category Strategy (4), Hades (5) tabs
+# Hide sidebar on Icarus (3), Category Strategy (4), Hades (5), Lex (6)
 def _on_tab_change(event):
-    _dash_sidebar.visible = event.new not in (3, 4, 5)
+    _dash_sidebar.visible = event.new not in (3, 4, 5, 6)
 
 tabs.param.watch(_on_tab_change, 'active')
 
