@@ -289,6 +289,14 @@ def init_database(client_name: str = "default") -> None:
         "ALTER TABLE vendors ADD COLUMN oc_registration_number TEXT",
         "ALTER TABLE vendors ADD COLUMN oc_entity_type TEXT",
         "ALTER TABLE vendors ADD COLUMN oc_jurisdiction TEXT",
+        # Hades due diligence fields
+        "ALTER TABLE vendors ADD COLUMN hades_risk_score REAL",
+        "ALTER TABLE vendors ADD COLUMN hades_risk_level TEXT",
+        "ALTER TABLE vendors ADD COLUMN hades_recommendation TEXT",
+        "ALTER TABLE vendors ADD COLUMN hades_sanctions_clear INTEGER",
+        "ALTER TABLE vendors ADD COLUMN hades_lksg_signal TEXT",
+        "ALTER TABLE vendors ADD COLUMN hades_next_steps TEXT",
+        "ALTER TABLE vendors ADD COLUMN hades_report_date TEXT",
     ]
     for sql in migrations:
         try:

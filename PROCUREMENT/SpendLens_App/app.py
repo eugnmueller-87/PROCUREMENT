@@ -2739,18 +2739,22 @@ icarus_btn.on_click(handle_icarus)
 from category_strategy_ui import CategoryStrategyPanel
 cat_strategy_panel = CategoryStrategyPanel(client_name="default")
 
+from hades_ui import HadesPanel
+hades_panel = HadesPanel(client_name="default")
+
 tabs = pn.Tabs(
     ("Dashboard", main_tab),
     ("Deep Dive", chart_deep),
     ("📋 Compliance", _compliance_tab),
     ("🪶 ICARUS AI", icarus_panel.view()),
     ("📊 Category Strategy", cat_strategy_panel.view()),
+    ("⚖️ Supplier DD", hades_panel.view()),
     sizing_mode="stretch_width",
 )
 
-# Hide sidebar on Icarus (index 3) and Category Strategy (index 4) tabs
+# Hide sidebar on Icarus (3), Category Strategy (4), Hades (5) tabs
 def _on_tab_change(event):
-    _dash_sidebar.visible = event.new not in (3, 4)
+    _dash_sidebar.visible = event.new not in (3, 4, 5)
 
 tabs.param.watch(_on_tab_change, 'active')
 
