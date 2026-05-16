@@ -13,22 +13,22 @@ import panel as pn
 import param
 from datetime import datetime
 
-# ── Theme ─────────────────────────────────────────────────────────────────────
-BG      = "#0F172A"       # near-black background for premium feel
-NAVY    = "#1E3A5F"
-NAVY2   = "#2563EB"
-CARD    = "#1E293B"       # dark card
-CARD2   = "#F8FAFC"       # light card (for detail panels)
-BORDER  = "#334155"
+# ── Theme (matches app.py / SpendLens light style) ───────────────────────────
+BG      = "#FFFFFF"
+NAVY    = "#1B3A6B"
+NAVY2   = "#2E5BA8"
+CARD    = "#F8F9FA"
+CARD2   = "#F8FAFC"
+BORDER  = "#E2E8F0"
 BORDER2 = "#E2E8F0"
-TEXT    = "#F1F5F9"       # light text on dark cards
-TEXT2   = "#1A202C"       # dark text on light cards
-DIM     = "#94A3B8"
-GREEN   = "#22C55E"
-YELLOW  = "#F59E0B"
-ORANGE  = "#F97316"
-RED     = "#EF4444"
-ACCENT  = "#3B82F6"
+TEXT    = "#1A1A2E"
+TEXT2   = "#1A202C"
+DIM     = "#64748B"
+GREEN   = "#1A7A4A"
+YELLOW  = "#B8860B"
+ORANGE  = "#E67E22"
+RED     = "#C0392B"
+ACCENT  = "#1B3A6B"
 
 RISK_COLOR = {"Low": GREEN, "Medium": YELLOW, "High": ORANGE, "Critical": RED}
 REC_COLOR  = {"Approve": GREEN, "Conditional Approval": YELLOW, "Block": RED}
@@ -59,8 +59,8 @@ PIPELINE_STEPS = [
     ("registry_lookups",        "Company registry lookup"),
     ("lksg_compliance_signals", "LkSG / CSDDD compliance signals"),
     ("esg_compliance_signals",  "ESG & labour signals"),
-    ("synthesis",               "Risk synthesis (Claude)"),
-    ("report_generation",       "Report generation (Claude)"),
+    ("synthesis",               "Risk synthesis"),
+    ("report_generation",       "Report generation"),
     ("hermes_registration",     "Hermes watchlist registration"),
 ]
 
@@ -98,13 +98,11 @@ def _score_color(score: float) -> str:
 
 
 def _score_bar_dark(score: float, width: int = 200) -> str:
-    """Progress bar styled for dark card backgrounds."""
     pct   = int(score * 10)
     color = _score_color(score)
-    track = "#2D3748"
     return (
         f"<div style='display:flex;align-items:center;gap:10px'>"
-        f"<div style='width:{width}px;height:10px;background:{track};border-radius:5px;"
+        f"<div style='width:{width}px;height:10px;background:{BORDER};border-radius:5px;"
         f"overflow:hidden;flex-shrink:0'>"
         f"<div style='width:{pct}%;height:100%;background:{color};"
         f"border-radius:5px;transition:width 0.6s ease'></div></div>"
@@ -144,11 +142,11 @@ def _risk_legend_html() -> str:
 def _step_row(label: str, state: str) -> str:
     """state: pending | running | pass | fail"""
     icons  = {"pending": "○", "running": "◎", "pass": "✓", "fail": "✗"}
-    colors = {"pending": "#475569", "running": ACCENT, "pass": GREEN, "fail": RED}
+    colors = {"pending": DIM, "running": ACCENT, "pass": GREEN, "fail": RED}
     icon   = icons.get(state, "○")
-    color  = colors.get(state, "#475569")
+    color  = colors.get(state, DIM)
     spin   = " class='spinning'" if state == "running" else ""
-    label_color = TEXT if state != "pending" else "#475569"
+    label_color = TEXT if state != "pending" else DIM
     return (
         f"<div style='display:flex;align-items:center;gap:10px;padding:7px 0;"
         f"border-bottom:1px solid {BORDER}'>"
@@ -216,64 +214,28 @@ class HadesPanel(param.Parameterized):
         self._company_input = pn.widgets.TextInput(
             placeholder="e.g. Robert Bosch GmbH",
             name="", width=340,
-            stylesheets=[f"""
-                :host input {{
-                    background:#1E293B;border:1.5px solid {BORDER};color:{TEXT};
-                    border-radius:8px;padding:8px 12px;font-size:13px;
-                }}
-                :host input:focus {{border-color:{ACCENT};outline:none;}}
-                :host input::placeholder {{color:{DIM};}}
-            """],
         )
         self._category_sel = pn.widgets.Select(
             options=SPENDLENS_CATEGORIES, value="Professional Services",
             name="", width=220,
-            stylesheets=[f"""
-                :host select {{
-                    background:#1E293B;border:1.5px solid {BORDER};color:{TEXT};
-                    border-radius:8px;padding:8px 10px;font-size:13px;
-                }}
-            """],
         )
         self._country_input = pn.widgets.TextInput(
             value="DE", name="", width=70,
-            stylesheets=[f"""
-                :host input {{
-                    background:#1E293B;border:1.5px solid {BORDER};color:{TEXT};
-                    border-radius:8px;padding:8px 10px;font-size:13px;text-align:center;
-                }}
-                :host input:focus {{border-color:{ACCENT};outline:none;}}
-            """],
         )
         self._mode_toggle = pn.widgets.RadioButtonGroup(
             options=["🔍 Compliance Check", "➕ Onboard Supplier"],
             value="🔍 Compliance Check",
             button_type="default", width=360,
             stylesheets=[f"""
-                :host .bk-btn {{
-                    background:#1E293B;border:1.5px solid {BORDER};
-                    color:{DIM};font-size:13px;border-radius:8px;padding:8px 16px;
-                    transition:all 0.2s;
-                }}
-                :host .bk-btn:hover {{border-color:{ACCENT};color:{TEXT};}}
-                :host .bk-btn.bk-active {{
-                    background:{ACCENT};border-color:{ACCENT};
-                    color:#fff;font-weight:700;
-                }}
+                :host .bk-btn {{background:{CARD};border:1.5px solid {BORDER};
+                    color:{TEXT};font-size:13px;border-radius:6px;padding:6px 14px;}}
+                :host .bk-btn.bk-active {{background:{NAVY};border-color:{NAVY};
+                    color:#fff;font-weight:600;}}
             """],
         )
         self._run_btn = pn.widgets.Button(
             name="▶  Run Investigation", button_type="primary", width=200,
-            stylesheets=[f"""
-                :host .bk-btn {{
-                    background:linear-gradient(135deg,{ACCENT},{NAVY2});
-                    border:none;font-size:14px;font-weight:700;
-                    border-radius:8px;padding:10px 20px;color:#fff;
-                    box-shadow:0 4px 12px {ACCENT}44;transition:opacity 0.2s;
-                }}
-                :host .bk-btn:hover {{opacity:0.9;}}
-                :host .bk-btn:disabled {{opacity:0.4;}}
-            """],
+            stylesheets=[f":host .bk-btn{{background:{NAVY};border-color:{NAVY};font-size:13px;}}"],
         )
         self._status_md   = pn.pane.Markdown("", width=600,
                                               stylesheets=[f"p{{color:{DIM};font-size:13px;}}"])
@@ -316,7 +278,7 @@ class HadesPanel(param.Parameterized):
                 f"<div style='display:flex;justify-content:space-between;"
                 f"font-size:10px;color:{DIM};margin-bottom:4px'>"
                 f"<span>Progress</span><span>{progress_pct}%</span></div>"
-                f"<div style='height:4px;background:#2D3748;border-radius:2px'>"
+                f"<div style='height:4px;background:{BORDER};border-radius:2px'>"
                 f"<div style='width:{progress_pct}%;height:100%;background:{ACCENT};"
                 f"border-radius:2px;transition:width 0.5s ease'></div></div>"
                 f"</div>"
@@ -462,39 +424,29 @@ class HadesPanel(param.Parameterized):
             if hermes_reg else ""
         )
         header = (
-            f"<div style='background:linear-gradient(135deg,{CARD} 0%,#162032 100%);"
-            f"border:1px solid {BORDER};border-radius:14px;"
-            f"padding:24px 28px;margin-bottom:14px;"
-            f"box-shadow:0 4px 24px #00000033'>"
+            f"<div style='background:{CARD};border:1px solid {BORDER};border-radius:12px;"
+            f"padding:20px 24px;margin-bottom:14px'>"
             f"<div style='display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap'>"
 
-            # Company name + meta
             f"<div style='flex:1;min-width:200px'>"
-            f"<div style='font-size:24px;font-weight:800;color:{TEXT};letter-spacing:-0.5px'>"
-            f"{company}</div>"
-            f"<div style='font-size:12px;color:{DIM};margin-top:4px'>"
-            f"{category} &nbsp;·&nbsp; {country} &nbsp;·&nbsp; "
-            f"{datetime.now().strftime('%Y-%m-%d')}</div>"
+            f"<div style='font-size:20px;font-weight:700;color:{NAVY}'>{company}</div>"
+            f"<div style='font-size:12px;color:{DIM};margin-top:2px'>"
+            f"{category} · {country} · {datetime.now().strftime('%Y-%m-%d')}</div>"
             f"{hermes_badge}"
             f"</div>"
 
-            # Overall risk score — big number
             f"<div style='text-align:center;min-width:110px'>"
-            f"<div style='font-size:10px;color:{DIM};text-transform:uppercase;"
-            f"letter-spacing:1.5px;margin-bottom:4px'>Overall Risk</div>"
-            f"<div style='font-size:52px;font-weight:900;color:{overall_color};"
-            f"line-height:1;text-shadow:0 0 20px {overall_color}44'>{overall:.1f}</div>"
-            f"<div style='font-size:12px;color:{overall_color};font-weight:700;"
-            f"margin-top:4px;text-transform:uppercase;letter-spacing:1px'>{risk_lvl}</div>"
+            f"<div style='font-size:11px;color:{DIM};text-transform:uppercase;"
+            f"letter-spacing:1px'>Overall Risk</div>"
+            f"<div style='font-size:40px;font-weight:800;color:{overall_color};"
+            f"line-height:1.1'>{overall:.1f}</div>"
+            f"<div style='font-size:12px;color:{overall_color};font-weight:600'>{risk_lvl}</div>"
             f"</div>"
 
-            # Recommendation pill
             f"<div style='text-align:center;min-width:160px'>"
-            f"<div style='font-size:10px;color:{DIM};text-transform:uppercase;"
-            f"letter-spacing:1.5px;margin-bottom:8px'>Recommendation</div>"
-            f"<div style='display:inline-block;background:{rec_color}22;"
-            f"border:2px solid {rec_color}66;border-radius:12px;"
-            f"padding:8px 20px;font-size:17px;font-weight:800;color:{rec_color}'>"
+            f"<div style='font-size:11px;color:{DIM};text-transform:uppercase;"
+            f"letter-spacing:1px'>Recommendation</div>"
+            f"<div style='font-size:20px;font-weight:800;color:{rec_color};margin-top:4px'>"
             f"{rec_icon} {rec}</div>"
             f"</div>"
 
@@ -548,7 +500,7 @@ class HadesPanel(param.Parameterized):
                 for s in next_steps
             )
             steps_html = (
-                f"<div style='background:#1C1700;border:1px solid {YELLOW}44;"
+                f"<div style='background:#FFF8E1;border:1px solid {YELLOW}44;"
                 f"border-radius:12px;padding:18px 22px;margin-bottom:14px'>"
                 f"<div style='font-size:11px;font-weight:700;color:{YELLOW};text-transform:uppercase;"
                 f"letter-spacing:1.5px;margin-bottom:10px'>Required Next Steps</div>"
@@ -561,7 +513,7 @@ class HadesPanel(param.Parameterized):
         if self._mode == "onboard":
             if rec == "Block":
                 onboard_html = (
-                    f"<div style='background:#1A0A0A;border:1px solid {RED}44;"
+                    f"<div style='background:#FFF0F0;border:1px solid {RED}44;"
                     f"border-radius:12px;padding:18px 22px;margin-bottom:14px'>"
                     f"<div style='font-size:14px;color:{RED};font-weight:700'>"
                     f"🚫 Supplier blocked — not added to SpendLens</div>"
@@ -576,7 +528,7 @@ class HadesPanel(param.Parameterized):
                 msg   = "✅ Supplier added to SpendLens vendor database" if saved \
                         else "⚠️ Supplier already exists — Hades fields updated"
                 onboard_html = (
-                    f"<div style='background:#0A1A0E;border:1px solid {GREEN}44;"
+                    f"<div style='background:#F0FFF4;border:1px solid {GREEN}44;"
                     f"border-radius:12px;padding:18px 22px;margin-bottom:14px'>"
                     f"<div style='font-size:14px;color:{color};font-weight:700'>{msg}</div>"
                     f"<div style='font-size:12px;color:{DIM};margin-top:6px'>"
@@ -652,26 +604,15 @@ class HadesPanel(param.Parameterized):
         )
         run_row = pn.Row(self._run_btn, self._status_md, align="center", margin=(0, 0, 24, 0))
 
-        # ── Dark premium header ───────────────────────────────────────────────
+        # ── Header ────────────────────────────────────────────────────────────
         header_html = pn.pane.HTML(
-            f"<div style='background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 100%);"
-            f"border-radius:14px;padding:24px 32px;margin-bottom:24px;"
-            f"border:1px solid {BORDER};box-shadow:0 8px 32px #00000044;"
-            f"display:flex;align-items:center;gap:20px'>"
-            f"<div style='font-size:40px'>⚖️</div>"
+            f"<div style='background:{NAVY};border-radius:12px;padding:20px 28px;"
+            f"margin-bottom:20px;display:flex;align-items:center;gap:16px'>"
             f"<div>"
-            f"<div style='font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px'>Hades</div>"
-            f"<div style='font-size:13px;color:{DIM};margin-top:3px'>"
-            f"Autonomous supplier due diligence &nbsp;·&nbsp; "
-            f"Sanctions &nbsp;·&nbsp; LkSG/CSDDD &nbsp;·&nbsp; ESG &nbsp;·&nbsp; "
-            f"News &nbsp;·&nbsp; Registry &nbsp;·&nbsp; Hermes</div>"
-            f"</div>"
-            f"<div style='margin-left:auto;text-align:right'>"
-            f"<div style='font-size:10px;color:{DIM};text-transform:uppercase;"
-            f"letter-spacing:1px'>Powered by</div>"
-            f"<div style='font-size:13px;color:{ACCENT};font-weight:700'>Claude Sonnet 4.6</div>"
-            f"</div>"
-            f"</div>",
+            f"<div style='font-size:22px;font-weight:800;color:#fff'>⚖️ Hades</div>"
+            f"<div style='font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px'>"
+            f"Autonomous supplier due diligence · Sanctions · LkSG/CSDDD · ESG · News · Registry</div>"
+            f"</div></div>",
             sizing_mode="stretch_width",
         )
 
@@ -691,7 +632,7 @@ class HadesPanel(param.Parameterized):
         warning = pn.pane.HTML("")
         if not HADES_URL:
             warning = pn.pane.HTML(
-                f"<div style='background:#1C1400;border:1px solid {YELLOW}55;border-radius:10px;"
+                f"<div style='background:#FFF8E1;border:1px solid {YELLOW};border-radius:8px;"
                 f"padding:12px 18px;margin-bottom:18px;font-size:13px;color:{YELLOW}'>"
                 f"⚠️ <b>HADES_URL</b> not configured — add it to Railway Variables to enable investigations."
                 f"</div>",
@@ -718,7 +659,7 @@ class HadesPanel(param.Parameterized):
             form_section,
             sizing_mode="stretch_width",
             margin=(16, 24),
-            stylesheets=[f":host{{background:{BG};}}"],
+            stylesheets=[],
         )
 
         self._pipeline_pane.object = self._pipeline_html()
