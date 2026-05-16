@@ -2796,4 +2796,5 @@ template = pn.template.FastListTemplate(
 template.servable()
 
 if __name__ == "__main__":
-    pn.serve(template, port=5006, show=True, autoreload=True)
+    port = int(os.environ.get("PORT", 5006))
+    pn.serve(template, port=port, address="0.0.0.0", show=False, autoreload=False)

@@ -3,6 +3,8 @@
 # SpendLens
 ### AI-Powered Procurement Intelligence
 
+**Live:** [procurement-production-f940.up.railway.app](https://procurement-production-f940.up.railway.app)
+
 > *Procurement has been running on static reports and manual analysis for decades. SpendLens changes that.*
 
 ---
@@ -257,6 +259,7 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 | OpenCorporates — supplier legal registration enrichment | 🔨 Planned |
 | Quandl / Nasdaq Data Link — commodity price feeds for cost justification | 🔨 Planned |
 | Creditsafe / D&B — supplier financial health & insolvency risk | 🔨 Planned |
+| Enterprise security — HTTPS/TLS, SSO (Azure AD / Okta / Google), encryption at rest, audit logging, RBAC | 🔨 Planned |
 
 ---
 
@@ -265,6 +268,33 @@ PYTHONUTF8=1 panel serve app.py --show --port 5006
 - **Uploaded documents** (contracts, pricing sheets) are held in memory only for the duration of the browser session. Nothing is written to disk. Refreshing the page clears all uploaded documents.
 - **Spend data** is stored in a per-client SQLite database on the local machine. No data is sent to external services except vendor names and headlines for AI classification.
 - **API key** is read from `.env` at startup and never logged or exposed in the UI.
+
+---
+
+## Enterprise Readiness
+
+SpendLens is being built for company use — not as a proof of concept, but as a tool that can be deployed inside a real corporate environment and meet the security and compliance requirements that come with it.
+
+Everything on this roadmap is built in-house. No integration consultants, no vendor lock-in, no six-month implementation projects.
+
+**Planned capabilities:**
+
+| Capability | What it means |
+|---|---|
+| **SSO — Single Sign-On** | Login via your company's existing identity provider: Azure Active Directory, Okta, or Google Workspace. No separate credentials to manage. |
+| **Encryption at rest** | All spend data and supplier records encrypted on disk. Files are unreadable without the encryption key, even if the server is accessed directly. |
+| **Encryption in transit** | All traffic between browser and server over HTTPS/TLS. No data exposed on the wire. |
+| **Role-based access control** | Three roles — Reader, Editor, Administrator — with fine-grained control over who can upload data, edit suppliers, run AI scans, or manage users. |
+| **Audit log** | Every action logged with timestamp and user: uploads, supplier edits, exports, AI queries. Full traceability for compliance reviews. |
+| **Data residency** | SpendLens runs on your infrastructure — on-premises or in a cloud region of your choosing. Spend data never leaves your perimeter. |
+| **Per-client data isolation** | Each company's data is fully isolated. No shared databases, no cross-client data leakage. |
+| **Self-hosted deployment** | Packaged as a Docker container. IT can deploy and manage it without any dependency on external vendors. |
+| **GDPR compliance** | Data processing agreement template included. Right-to-deletion endpoint. No personal data sent to third parties beyond vendor names for AI classification. |
+| **Secrets management** | API keys stored in system-level secrets management — not in application config files. |
+| **MFA support** | Multi-factor authentication enforced at the identity provider level via SSO. |
+| **Dependency & vulnerability scanning** | Automated scanning of Python dependencies in CI pipeline before any deployment. |
+
+The goal is a tool that a company's IT security team can evaluate, approve, and hand to procurement — without a six-figure consulting project in between.
 
 ---
 
