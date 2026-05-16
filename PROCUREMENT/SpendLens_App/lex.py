@@ -67,16 +67,26 @@ PLAYBOOK = {
         "guidance": "Penalty cap should not exceed 10% of contract value.",
     },
     "liability_cap": {
-        "green":  lambda v: v and "contract value" in v.lower(),
+        "green":  lambda v: v and any(x in v.lower() for x in (
+            "contract value", "fees paid", "total fees", "annual fee",
+            "12 months", "twelve months", "capped", "shall not exceed",
+            "limited to", "limited liability",
+        )),
         "yellow": lambda v: v and len(v) > 0,
         "red":    lambda v: not v,
         "label":  "Liability Cap",
         "guidance": "Liability must be capped. Unlimited liability is critical risk.",
     },
     "jurisdiction": {
-        "green":  lambda v: v and any(x in v.upper() for x in ("DE", "EU", "GERMANY", "DEUTSCH", "MÜNCHEN", "BERLIN", "HAMBURG", "FRANKFURT")),
-        "yellow": lambda v: v and any(x in v.upper() for x in ("UK", "ENGLAND", "SWISS", "CH", "AT", "AUSTRIA")),
-        "red":    lambda v: not v or any(x in v.upper() for x in ("US", "USA", "DELAWARE", "NEW YORK", "CALIFORNIA", "CAYMAN", "BVI")),
+        "green":  lambda v: v and any(x in v.upper() for x in (
+            "DE", "EU", "GERMANY", "DEUTSCH", "MÜNCHEN", "MUNICH",
+            "BERLIN", "HAMBURG", "FRANKFURT", "KÖLN", "COLOGNE",
+            "DÜSSELDORF", "STUTTGART", "AUSTRIA", "AT", "WIEN",
+            "SWISS", "CH", "ZURICH", "ZÜRICH", "NETHERLANDS", "NL",
+            "FRANCE", "FR", "PARIS", "ITALY", "IT", "SPAIN", "ES",
+        )),
+        "yellow": lambda v: v and any(x in v.upper() for x in ("UK", "ENGLAND", "SCOTLAND")),
+        "red":    lambda v: not v or any(x in v.upper() for x in ("US", "USA", "DELAWARE", "NEW YORK", "CALIFORNIA", "CAYMAN", "BVI", "SINGAPORE", "HONG KONG")),
         "label":  "Jurisdiction / Governing Law",
         "guidance": "DE/EU jurisdiction preferred. Non-EU jurisdiction raises enforcement cost.",
     },
@@ -264,6 +274,8 @@ def _evaluate_playbook(clauses: dict) -> tuple[dict, float, str, list[str]]:
             flags[key] = "red"
             red_count += 1
             actions.append(f"[CRITICAL] {rules['label']}: {rules['guidance']}")
+        elif rules["green"](val):
+            flags[key] = "green"
         elif rules["yellow"](val):
             flags[key] = "yellow"
             yellow_count += 1
