@@ -96,7 +96,7 @@ def _step_row(label: str, state: str) -> str:
         f"<div style='display:flex;align-items:center;gap:10px;padding:6px 0;"
         f"border-bottom:1px solid {BORDER}'>"
         f"<span{spin} style='font-size:16px;color:{color};width:20px;text-align:center'>{icon}</span>"
-        f"<span style='font-size:13px;color:{TEXT if state != \"pending\" else DIM}'>{label}</span>"
+        f"<span style='font-size:13px;color:{TEXT if state != 'pending' else DIM}'>{label}</span>"
         f"</div>"
     )
 
