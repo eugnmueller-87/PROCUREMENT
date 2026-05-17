@@ -96,7 +96,7 @@ function Dashboard({ openDrawer, api }) {
 
       {/* KPI row */}
       <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)" }}>
-        <KpiCard label="Total Spend" value={`€${kpis.totalSpend}M`} sub="All years" accent={null} />
+        <KpiCard label="Total Spend" value={`€${kpis.totalSpend}M`} sub={year ? `${year} spend` : "All years"} accent={null} />
         <KpiCard label="YoY Growth" value={`${kpis.yoyGrowth > 0 ? "+" : ""}${kpis.yoyGrowth}%`} sub="vs prior year" accent={kpis.yoyGrowth > 0 ? "warn" : "good"} />
         <KpiCard label="EBITDA Impact" value={`€${kpis.ebitdaImpact}K`} sub="savings + avoidance" accent="good" />
         <KpiCard label="Contract Coverage" value={`${kpis.contractCoverage}%`} sub={`target 100%`} accent={kpis.contractCoverage < 80 ? "warn" : "good"} />
@@ -106,9 +106,9 @@ function Dashboard({ openDrawer, api }) {
       {/* Charts row */}
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div className="card">
-          <div className="card-h"><h3>Spend Evolution by Category (€M)</h3></div>
+          <div className="card-h"><h3>Spend Evolution by Category (€M)</h3>{year && <span className="sub">highlighted: {year}</span>}</div>
           {series.length > 0
-            ? <StackedArea series={series} xLabels={trendYears.map(String)} height={280} />
+            ? <StackedArea series={series} xLabels={trendYears.map(String)} height={280} highlightX={year ? String(year) : null} />
             : <div style={{ height: 280, display: "grid", placeItems: "center", color: "var(--ink-4)" }}>No trend data</div>
           }
         </div>

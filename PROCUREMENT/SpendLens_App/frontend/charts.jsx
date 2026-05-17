@@ -29,7 +29,7 @@ function Sparkline({ data, color = "var(--primary)", height = 30 }) {
 }
 
 // ── Stacked Area ───────────────────────────────────────────────────────────────
-function StackedArea({ series, xLabels, height = 280 }) {
+function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
   const w = 800, h = height - 30;
   const n = xLabels.length;
   const stacks = xLabels.map((_, i) => {
@@ -55,6 +55,7 @@ function StackedArea({ series, xLabels, height = 280 }) {
   });
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => ({ v: maxY * t, y: h - t * h }));
+  const hlIdx = highlightX ? xLabels.indexOf(highlightX) : -1;
 
   return (
     <div style={{ width: "100%", overflow: "visible" }}>
@@ -70,8 +71,19 @@ function StackedArea({ series, xLabels, height = 280 }) {
         {polys.map(p => (
           <polygon key={p.id} points={p.pts} fill={p.color} opacity="0.85" />
         ))}
+        {/* Year highlight marker */}
+        {hlIdx >= 0 && (
+          <g>
+            <line x1={x(hlIdx)} y1={0} x2={x(hlIdx)} y2={h} stroke="var(--ink)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5" />
+            <rect x={x(hlIdx) - 18} y={-8} width={36} height={14} fill="var(--primary)" rx="3" />
+            <text x={x(hlIdx)} y={1} fontSize="9" fill="#fff" textAnchor="middle" fontFamily="Geist Mono" fontWeight="600">{highlightX}</text>
+          </g>
+        )}
         {xLabels.map((lbl, i) => (
-          <text key={i} x={x(i)} y={h + 18} fontSize="10.5" fill="var(--ink-3)" textAnchor="middle" fontFamily="Geist Mono">{lbl}</text>
+          <text key={i} x={x(i)} y={h + 18} fontSize="10.5"
+            fill={lbl === highlightX ? "var(--primary)" : "var(--ink-3)"}
+            fontWeight={lbl === highlightX ? "700" : "400"}
+            textAnchor="middle" fontFamily="Geist Mono">{lbl}</text>
         ))}
       </svg>
     </div>

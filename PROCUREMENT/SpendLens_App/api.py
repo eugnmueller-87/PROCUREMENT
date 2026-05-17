@@ -87,7 +87,7 @@ def dashboard(year: Optional[int] = None):
         conn.close()
 
     if df.empty:
-        return _demo_dashboard()
+        return _demo_dashboard(year)
 
     sc = _spend_col(df)
     df["_spend"] = df[sc].fillna(0)
@@ -171,21 +171,10 @@ def dashboard(year: Optional[int] = None):
     }
 
 
-def _demo_dashboard():
-    """Return demo data when no transactions are in the DB."""
-    cats = [
-        {"id": "cloud", "name": "Cloud & Compute",       "spend": 24.0, "budget": 22.0, "risk": "critical", "suppliers": 5, "growth": 471},
-        {"id": "ai",    "name": "AI/ML APIs & Data",     "spend": 9.2,  "budget": 9.0,  "risk": "high",     "suppliers": 5, "growth": 1050},
-        {"id": "hr",    "name": "Recruitment & HR",      "spend": 6.8,  "budget": 6.5,  "risk": "high",     "suppliers": 5, "growth": 1033},
-        {"id": "mkt",   "name": "Marketing & Campaigns", "spend": 5.5,  "budget": 5.2,  "risk": "high",     "suppliers": 4, "growth": 1733},
-        {"id": "fac",   "name": "Facilities & Office",   "spend": 4.8,  "budget": 4.9,  "risk": "high",     "suppliers": 5, "growth": 860},
-        {"id": "re",    "name": "Real Estate",           "spend": 4.2,  "budget": 4.5,  "risk": "high",     "suppliers": 3, "growth": 250},
-        {"id": "it",    "name": "IT Software & SaaS",    "spend": 4.2,  "budget": 4.4,  "risk": "low",      "suppliers": 5, "growth": 367},
-        {"id": "prof",  "name": "Professional Services", "spend": 3.2,  "budget": 3.2,  "risk": "high",     "suppliers": 5, "growth": 700},
-        {"id": "trav",  "name": "Travel & Expenses",     "spend": 3.2,  "budget": 3.0,  "risk": "low",      "suppliers": 5, "growth": 1500},
-        {"id": "tel",   "name": "Telecom & Voice",       "spend": 3.0,  "budget": 3.1,  "risk": "critical", "suppliers": 4, "growth": 650},
-        {"id": "hw",    "name": "Hardware & Equipment",  "spend": 2.4,  "budget": 2.5,  "risk": "high",     "suppliers": 4, "growth": 700},
-    ]
+def _demo_dashboard(year: Optional[int] = None):
+    """Return demo data when no transactions are in the DB, filtered by year."""
+
+    # Full trend data — all categories × all years
     trend_data = {
         "Cloud & Compute":       {2022: 4.2,  2023: 7.1,  2024: 12.4, 2025: 18.8, 2026: 24.0},
         "AI/ML APIs & Data":     {2022: 0.8,  2023: 1.7,  2024: 3.9,  2025: 6.8,  2026: 9.2},
@@ -199,21 +188,83 @@ def _demo_dashboard():
         "Telecom & Voice":       {2022: 0.4,  2023: 0.8,  2024: 1.5,  2025: 2.3,  2026: 3.0},
         "Hardware & Equipment":  {2022: 0.3,  2023: 0.7,  2024: 1.3,  2025: 1.9,  2026: 2.4},
     }
-    expiring = [
-        {"supplier": "OpenAI",      "cat": "AI/ML APIs & Data",    "value": 2800,  "expiry": "2026-06-30", "risk": "High",     "daysLeft": 44},
-        {"supplier": "Deloitte",    "cat": "Professional Services", "value": 1200,  "expiry": "2026-03-31", "risk": "Critical", "daysLeft": -47},
-        {"supplier": "Twilio",      "cat": "Telecom & Voice",       "value": 2200,  "expiry": "2026-07-31", "risk": "Critical", "daysLeft": 75},
-        {"supplier": "AWS",         "cat": "Cloud & Compute",       "value": 18000, "expiry": "2026-09-30", "risk": "High",     "daysLeft": 136},
-        {"supplier": "BCD Travel",  "cat": "Travel & Expenses",     "value": 800,   "expiry": "2026-09-30", "risk": "Medium",   "daysLeft": 136},
-        {"supplier": "Hays",        "cat": "Recruitment & HR",      "value": 1500,  "expiry": "2026-12-31", "risk": "Medium",   "daysLeft": 228},
-        {"supplier": "Datadog",     "cat": "IT Software & SaaS",    "value": 600,   "expiry": "2027-01-31", "risk": "Low",      "daysLeft": 259},
+
+    all_years = [2022, 2023, 2024, 2025, 2026]
+
+    # Per-category metadata (risk, suppliers, budget multiplier)
+    cat_meta = [
+        {"id": "cloud", "name": "Cloud & Compute",       "risk": "critical", "suppliers": 5, "budget_ratio": 0.92},
+        {"id": "ai",    "name": "AI/ML APIs & Data",     "risk": "high",     "suppliers": 5, "budget_ratio": 0.97},
+        {"id": "hr",    "name": "Recruitment & HR",       "risk": "high",     "suppliers": 5, "budget_ratio": 0.96},
+        {"id": "mkt",   "name": "Marketing & Campaigns",  "risk": "high",     "suppliers": 4, "budget_ratio": 0.94},
+        {"id": "fac",   "name": "Facilities & Office",    "risk": "high",     "suppliers": 5, "budget_ratio": 1.02},
+        {"id": "re",    "name": "Real Estate",            "risk": "high",     "suppliers": 3, "budget_ratio": 1.07},
+        {"id": "it",    "name": "IT Software & SaaS",     "risk": "low",      "suppliers": 5, "budget_ratio": 1.05},
+        {"id": "prof",  "name": "Professional Services",  "risk": "high",     "suppliers": 5, "budget_ratio": 1.00},
+        {"id": "trav",  "name": "Travel & Expenses",      "risk": "low",      "suppliers": 5, "budget_ratio": 0.93},
+        {"id": "tel",   "name": "Telecom & Voice",        "risk": "critical", "suppliers": 4, "budget_ratio": 1.03},
+        {"id": "hw",    "name": "Hardware & Equipment",   "risk": "high",     "suppliers": 4, "budget_ratio": 1.04},
     ]
+
+    # Resolve selected year spend and prior year for YoY
+    sel_year = year if year and year in all_years else None
+    prev_year = (sel_year - 1) if sel_year and (sel_year - 1) in all_years else None
+
+    def year_spend(name, y):
+        return trend_data.get(name, {}).get(y, 0)
+
+    # Build category list for selected year (or 2026 as "current" when all years)
+    display_year = sel_year or 2026
+    prev_display = prev_year or 2025
+
+    cats = []
+    for m in cat_meta:
+        spend = year_spend(m["name"], display_year)
+        prev  = year_spend(m["name"], prev_display)
+        first = year_spend(m["name"], 2022)
+        growth = round((spend - first) / first * 100) if first else 0
+        cats.append({
+            "id": m["id"],
+            "name": m["name"],
+            "spend": spend,
+            "budget": round(spend * m["budget_ratio"], 1),
+            "risk": m["risk"],
+            "suppliers": m["suppliers"],
+            "growth": growth,
+        })
+
+    # KPIs
+    total = round(sum(c["spend"] for c in cats), 1)
+    prev_total = round(sum(year_spend(m["name"], prev_display) for m in cat_meta), 1)
+    yoy = round((total - prev_total) / prev_total * 100, 1) if prev_total else 0
+
+    # Maverick and PO coverage shift slightly by year
+    maverick_pct = {2022: 18, 2023: 15, 2024: 13, 2025: 12, 2026: 12}.get(display_year, 12)
+    po_coverage  = {2022: 60, 2023: 65, 2024: 70, 2025: 72, 2026: 74}.get(display_year, 74)
+
+    expiring = [
+        {"supplier": "OpenAI",     "cat": "AI/ML APIs & Data",    "value": 2800,  "expiry": "2026-06-30", "risk": "High",     "daysLeft": 44},
+        {"supplier": "Deloitte",   "cat": "Professional Services", "value": 1200,  "expiry": "2026-03-31", "risk": "Critical", "daysLeft": -47},
+        {"supplier": "Twilio",     "cat": "Telecom & Voice",       "value": 2200,  "expiry": "2026-07-31", "risk": "Critical", "daysLeft": 75},
+        {"supplier": "AWS",        "cat": "Cloud & Compute",       "value": 18000, "expiry": "2026-09-30", "risk": "High",     "daysLeft": 136},
+        {"supplier": "BCD Travel", "cat": "Travel & Expenses",     "value": 800,   "expiry": "2026-09-30", "risk": "Medium",   "daysLeft": 136},
+        {"supplier": "Hays",       "cat": "Recruitment & HR",      "value": 1500,  "expiry": "2026-12-31", "risk": "Medium",   "daysLeft": 228},
+        {"supplier": "Datadog",    "cat": "IT Software & SaaS",    "value": 600,   "expiry": "2027-01-31", "risk": "Low",      "daysLeft": 259},
+    ]
+
     return {
-        "years": [2022, 2023, 2024, 2025, 2026],
-        "selectedYear": None,
-        "kpis": {"totalSpend": 70.5, "yoyGrowth": 44, "maverickPct": 12, "poCoverage": 74, "contractCoverage": 75, "ebitdaImpact": 1950},
+        "years": all_years,
+        "selectedYear": sel_year,
+        "kpis": {
+            "totalSpend": total,
+            "yoyGrowth": yoy,
+            "maverickPct": maverick_pct,
+            "poCoverage": po_coverage,
+            "contractCoverage": 75,
+            "ebitdaImpact": round(total * 0.028 * 1000, 0),
+        },
         "categories": cats,
-        "trendYears": [2022, 2023, 2024, 2025, 2026],
+        "trendYears": all_years,
         "trendData": trend_data,
         "expiringContracts": expiring,
         "_demo": True,
