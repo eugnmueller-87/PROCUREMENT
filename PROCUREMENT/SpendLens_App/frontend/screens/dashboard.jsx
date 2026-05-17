@@ -116,7 +116,7 @@ function Dashboard({ openDrawer, api }) {
           <div className="card-h"><h3>Spend vs Budget (€M)</h3></div>
           <SpendVsBudget
             data={(categories || []).slice(0, 10).map(c => ({ name: c.name, spend: c.spend, budget: c.budget }))}
-            height={280}
+            absMax={Math.max(...Object.values(trendData).map(y => Math.max(...Object.values(y))))}
           />
         </div>
       </div>

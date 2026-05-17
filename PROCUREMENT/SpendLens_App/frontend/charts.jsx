@@ -91,8 +91,8 @@ function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
 }
 
 // ── Horizontal Bar (spend vs budget) ──────────────────────────────────────────
-function SpendVsBudget({ data, height = 320 }) {
-  const maxV = Math.max(...data.map(d => Math.max(d.spend || 0, d.budget || 0)), 1);
+function SpendVsBudget({ data, height = 320, absMax = null }) {
+  const maxV = absMax || Math.max(...data.map(d => Math.max(d.spend || 0, d.budget || 0)), 1);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
       {data.map(d => {
