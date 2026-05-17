@@ -1,7 +1,7 @@
 // SpendLens — Supplier Due Diligence (Hades) screen
 const { useState: useS, useEffect: useE } = React;
 
-const HADES_URL = "https://hades-production-b86a.up.railway.app";
+const HADES_URL = "/api/hades";
 
 const HADES_STEPS = [
   { id: "preflight",    label: "Pre-flight check" },

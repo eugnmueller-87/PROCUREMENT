@@ -37,6 +37,7 @@ from modules.supplier_profiler import (
 )
 
 CLIENT = os.environ.get("SPENDLENS_CLIENT", "default")
+HADES_URL = os.environ.get("HADES_URL", "")
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 # ── Init DB ────────────────────────────────────────────────────────────────────
@@ -59,6 +60,43 @@ def _conn():
 
 def _spend_col(df: pd.DataFrame) -> str:
     return "spend_eur" if "spend_eur" in df.columns and df["spend_eur"].notna().any() else "spend"
+
+
+# ── Hades proxy ────────────────────────────────────────────────────────────────
+
+import httpx as _httpx
+
+@app.get("/api/hades/health")
+def hades_health():
+    if not HADES_URL:
+        return {"status": "unconfigured"}
+    try:
+        r = _httpx.get(f"{HADES_URL}/health", timeout=5)
+        return r.json()
+    except Exception:
+        return {"status": "offline"}
+
+@app.post("/api/hades/investigate")
+async def hades_investigate(payload: dict):
+    if not HADES_URL:
+        raise HTTPException(503, "Hades not configured")
+    try:
+        async with _httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(f"{HADES_URL}/investigate", json=payload)
+            return r.json()
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+@app.get("/api/hades/result/{task_id}")
+async def hades_result(task_id: str):
+    if not HADES_URL:
+        raise HTTPException(503, "Hades not configured")
+    try:
+        async with _httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{HADES_URL}/result/{task_id}")
+            return r.json()
+    except Exception as e:
+        raise HTTPException(502, str(e))
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
