@@ -497,14 +497,78 @@ async def upload_spend(file: UploadFile = File(...)):
 
 # ── Icarus signals ─────────────────────────────────────────────────────────────
 
+def _demo_signals():
+    """Demo signals shown when icarus_memory.db is empty or missing."""
+    return [
+        {
+            "id": "demo-1", "headline": "AWS announces 15% GPU spot price increase for H100 instances",
+            "summary": "Amazon Web Services has raised spot pricing for H100 GPU instances by an average of 15% across us-east-1 and eu-west-1 regions, citing sustained demand from AI training workloads and constrained supply. On-demand pricing remains unchanged but reserved instance discounts have narrowed.",
+            "category": "Cloud & Compute", "source": "DatacenterDynamics", "relevance": 9,
+            "action": "Renegotiate AWS reserved instance terms before next renewal; benchmark against Azure and GCP spot pricing to build leverage.",
+            "timestamp": (datetime.now() - timedelta(days=1)).isoformat(),
+        },
+        {
+            "id": "demo-2", "headline": "OpenAI GPT-4o API pricing cut by 50% — enterprise contracts under review",
+            "summary": "OpenAI has halved API pricing for GPT-4o effective immediately, impacting enterprise contracts signed under previous rate cards. Customers on annual agreements may have overpay clauses; legal teams recommend auditing MSA pricing schedules within 30 days.",
+            "category": "AI/ML APIs & Data", "source": "Reuters", "relevance": 8,
+            "action": "Audit OpenAI contract pricing schedule; request renegotiation or credit against overpayment vs new public rates.",
+            "timestamp": (datetime.now() - timedelta(days=2)).isoformat(),
+        },
+        {
+            "id": "demo-3", "headline": "Gartner: SaaS renewals in 2026 averaging 22% above 2024 contract values",
+            "summary": "Gartner's Q1 2026 procurement benchmark shows SaaS renewal inflation averaging 22% above 2024 baseline contract values, driven by vendor consolidation post-M&A activity. IT Software & SaaS categories hardest hit; procurement teams urged to benchmark before entering renewal windows.",
+            "category": "IT Software & SaaS", "source": "Spend Matters", "relevance": 7,
+            "action": "Pull SaaS contract renewal calendar; flag contracts expiring in the next 90 days for benchmark analysis before vendor opens renewal conversation.",
+            "timestamp": (datetime.now() - timedelta(days=3)).isoformat(),
+        },
+        {
+            "id": "demo-4", "headline": "Twilio and Vonage price increases signal telecom consolidation pressure",
+            "summary": "Both Twilio and Vonage have issued Q2 pricing notices averaging 8–12% increases on CPaaS (Communications-Platform-as-a-Service) contracts. The increases follow infrastructure cost rises and competitive pressure from hyperscaler voice offerings (AWS Connect, Azure Communication Services).",
+            "category": "Telecom & Voice", "source": "Handelsblatt", "relevance": 7,
+            "action": "Benchmark CPaaS rates against hyperscaler alternatives; use AWS Connect pricing as leverage in Twilio renewal negotiation.",
+            "timestamp": (datetime.now() - timedelta(days=4)).isoformat(),
+        },
+        {
+            "id": "demo-5", "headline": "Tech contractor day rates rise 18% in Germany as talent market tightens",
+            "summary": "German IT contractor market shows 18% average day-rate increase YoY per Hays Technology report, with AI/ML specialists commanding 35% premium over 2024 rates. Supply constraints particularly acute in Munich and Berlin; companies with framework agreements signed pre-2025 face renegotiation pressure.",
+            "category": "Recruitment & HR", "source": "Reuters", "relevance": 6,
+            "action": "Review freelancer framework agreements; cap day-rate escalation clauses at CPI+5% in new contracts.",
+            "timestamp": (datetime.now() - timedelta(days=5)).isoformat(),
+        },
+        {
+            "id": "demo-6", "headline": "Deloitte and PwC raise consulting day rates by up to 20% for 2026 engagements",
+            "summary": "The Big Four consulting firms have issued 2026 rate cards with increases of 15–20% vs 2025. Deloitte cites AI tooling investment costs; PwC references talent market inflation. Fixed-fee project structures increasingly favoured by procurement over T&M to contain exposure.",
+            "category": "Professional Services", "source": "Spend Matters", "relevance": 6,
+            "action": "Negotiate fixed-fee project structures for new consulting engagements; avoid time-and-materials for scopes exceeding 3 months.",
+            "timestamp": (datetime.now() - timedelta(days=6)).isoformat(),
+        },
+        {
+            "id": "demo-7", "headline": "European office vacancy rates reach 12% — subletting opportunities emerging",
+            "summary": "European commercial real estate vacancy rates hit 12% in Q1 2026 (CBRE data), highest since 2010. Munich, Frankfurt, and Amsterdam seeing significant subletting activity as tech companies right-size post-remote-work. Procurement teams in lease renewals have strong negotiating position.",
+            "category": "Facilities & Office", "source": "Handelsblatt", "relevance": 5,
+            "action": "Request 15%+ rent reduction or rent-free period in any office lease renewal; benchmark against current market vacancy data.",
+            "timestamp": (datetime.now() - timedelta(days=7)).isoformat(),
+        },
+        {
+            "id": "demo-8", "headline": "Semiconductor shortage easing — hardware procurement window opening for H2 2026",
+            "summary": "TSMC and Samsung both report increased fab capacity utilization for 2026 H2 production runs, signalling end of multi-year chip shortage cycle. Server and networking hardware lead times falling from 52 weeks back toward 14–18 weeks. Buyers who locked in futures-style agreements may find spot market competitive.",
+            "category": "Hardware & Equipment", "source": "The Register", "relevance": 5,
+            "action": "Defer non-urgent hardware purchases to Q3 2026 to benefit from improved availability and normalized pricing.",
+            "timestamp": (datetime.now() - timedelta(days=8)).isoformat(),
+        },
+    ]
+
+
 @app.get("/api/signals")
 def signals(category: Optional[str] = None, days: int = 30, limit: int = 50):
     """Market intelligence signals from Icarus."""
     try:
-        from modules.database import get_connection as _gc
         icarus_db = Path(__file__).parent / "clients" / CLIENT / "icarus_memory.db"
         if not icarus_db.exists():
-            return {"signals": [], "total": 0}
+            demo = _demo_signals()
+            if category and category != "all":
+                demo = [s for s in demo if category.lower().split(" ")[0] in (s.get("category") or "").lower()]
+            return {"signals": demo[:limit], "total": len(demo), "_demo": True}
 
         conn = sqlite3.connect(str(icarus_db))
         conn.row_factory = sqlite3.Row
@@ -525,17 +589,23 @@ def signals(category: Optional[str] = None, days: int = 30, limit: int = 50):
 
         conn.close()
         result = [dict(r) for r in rows]
+        if not result:
+            demo = _demo_signals()
+            if category and category != "all":
+                demo = [s for s in demo if category.lower().split(" ")[0] in (s.get("category") or "").lower()]
+            return {"signals": demo[:limit], "total": len(demo), "_demo": True}
         return {"signals": result, "total": len(result)}
     except Exception:
-        return {"signals": [], "total": 0}
+        return {"signals": _demo_signals()[:limit], "total": 8, "_demo": True}
 
 
 @app.post("/api/signals/scan")
 def run_icarus_scan():
     """Trigger an Icarus RSS scan."""
     try:
-        from icarus import run_scan
-        count = run_scan(client_name=CLIENT)
+        from icarus import run
+        result = run(client_name=CLIENT)
+        count = len(result.get("signals", [])) if isinstance(result, dict) else 0
         return {"status": "ok", "new_signals": count}
     except Exception as e:
         raise HTTPException(500, str(e))

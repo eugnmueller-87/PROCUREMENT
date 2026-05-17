@@ -3,7 +3,7 @@ const { useState: useS, useEffect: useE } = React;
 
 const HADES_URL = "https://hades-production-b86a.up.railway.app";
 
-const STEPS = [
+const HADES_STEPS = [
   { id: "preflight",    label: "Pre-flight check" },
   { id: "web",          label: "Web research & background" },
   { id: "news",         label: "News sentiment (90 days)" },
@@ -25,7 +25,13 @@ function SupplierDD({ openDrawer, api }) {
   const [steps, setSteps] = useS({});
   const [report, setReport] = useS(null);
   const [error, setError] = useS("");
-  const [pollId, setPollId] = useS(null);
+  const [hadesStatus, setHadesStatus] = useS("unknown"); // "online" | "offline" | "unknown"
+
+  useE(() => {
+    fetch(`${HADES_URL}/health`, { signal: AbortSignal.timeout(4000) })
+      .then(r => setHadesStatus(r.ok ? "online" : "offline"))
+      .catch(() => setHadesStatus("offline"));
+  }, []);
 
   const CATS = [
     "Cloud & Compute", "AI/ML APIs & Data", "IT Software & SaaS",
@@ -41,17 +47,24 @@ function SupplierDD({ openDrawer, api }) {
     setReport(null);
     setSteps({});
 
+    if (hadesStatus === "offline") {
+      setError("Hades service is currently offline. The due diligence agent runs on Railway — check the deployment status or try again shortly.");
+      setRunning(false);
+      return;
+    }
     try {
       const res = await fetch(`${HADES_URL}/investigate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ vendor_name: vendor, category, country, mode }),
+        signal: AbortSignal.timeout(10000),
       });
-      if (!res.ok) throw new Error("Hades API error");
+      if (!res.ok) throw new Error(`Hades returned ${res.status}`);
       const { task_id } = await res.json();
       poll(task_id);
     } catch (e) {
-      setError("Could not reach Hades. Check network or try again.");
+      setHadesStatus("offline");
+      setError("Could not reach Hades. The service may be starting up — Railway cold-starts take ~30 seconds. Try again in a moment.");
       setRunning(false);
     }
   };
@@ -85,6 +98,12 @@ function SupplierDD({ openDrawer, api }) {
     return "pending";
   };
 
+  const statusBadge = () => {
+    if (hadesStatus === "online")  return <span className="chip good" style={{ fontSize: 11 }}><span className="dot" />Hades online</span>;
+    if (hadesStatus === "offline") return <span className="chip bad"  style={{ fontSize: 11 }}><span className="dot" />Hades offline</span>;
+    return <span className="chip" style={{ fontSize: 11, opacity: 0.6 }}>Checking…</span>;
+  };
+
   const riskColor = (score) => {
     if (!score) return "var(--ink-4)";
     if (score >= 7) return "var(--bad)";
@@ -96,6 +115,7 @@ function SupplierDD({ openDrawer, api }) {
     <div className="col">
       <div className="page-h">
         <div><h1>Supplier Due Diligence</h1><div className="sub">Sanctions · LkSG/CSDDD · ESG · News · Registry</div></div>
+        <div className="flex gap-2 center-y">{statusBadge()}</div>
       </div>
 
       {/* Input form */}
@@ -142,7 +162,7 @@ function SupplierDD({ openDrawer, api }) {
         <div className="card">
           <div className="card-h"><h3>Investigation Pipeline</h3></div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {STEPS.map(step => {
+            {HADES_STEPS.map(step => {
               const state = stepState(step.id);
               return (
                 <div key={step.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--hairline)" }}>
