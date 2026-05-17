@@ -1,191 +1,161 @@
-# SpendLens — Handover (2026-05-09)
+# SpendLens — Session Handover
+**Date:** 2026-05-17  
+**Session scope:** Full Panel → FastAPI + React migration + post-launch polish  
+**Branch:** `main` — all changes live on Railway
 
-## What SpendLens is
+---
 
-AI-powered procurement intelligence platform. Processes messy enterprise spend data (CSV/Excel from SAP, Coupa, Excel) through a 5-stage AI pipeline and surfaces compliance risks, supplier scorecards, and market context.
+## What changed this session
 
-Runs locally as a Panel web app:
+SpendLens was migrated from a Panel/Bokeh dashboard to a production-grade React SPA served by FastAPI.
+
+| Before | After |
+|--------|-------|
+| `panel serve app.py` | `uvicorn api:app` |
+| Panel widgets + Bokeh charts | React 18 (Babel standalone, no build step) |
+| No REST API | FastAPI at `/api/*` |
+| Bokeh WebSocket | Plain HTTP fetch from browser |
+
+**All Python business logic is unchanged** — `modules/`, `lex.py`, `icarus.py`, SQLite all work exactly as before.
+
+---
+
+## File map
+
+### Backend
+| File | Role |
+|------|------|
+| `api.py` | FastAPI — all REST endpoints + static frontend serving |
+| `railway.toml` | `startCommand = "uvicorn api:app --host 0.0.0.0 --port $PORT"` |
+| `Procfile` | Same start command (Railway reads this too) |
+| `requirements.txt` | Panel/Bokeh removed; `python-multipart`, `aiofiles`, `uvicorn[standard]` added |
+
+### Frontend (`frontend/`)
+| File | Role |
+|------|------|
+| `index.html` | Entry point — loads React 18 UMD, Babel standalone, all JSX in order |
+| `styles.css` | Claude Design system — oklch tokens, layout grid, all component classes |
+| `icons.jsx` | SVG icon set → `window.Icons` |
+| `charts.jsx` | Chart primitives: `StackedArea`, `SpendVsBudget`, `Treemap`, `RiskArc`, `Donut`, `Sparkline`, `Waterfall`. Also exports `riskColor()` / `riskClass()` shared utilities |
+| `shell.jsx` | `Sidebar`, `TopBar` (with AI chat, notifications, settings), `CmdPalette`, `Drawer` |
+| `tweaks-panel.jsx` | Stub — all components return null, kept for compatibility |
+| `app.jsx` | Hash router, global `DrawerBody` handling 4 drawer kinds |
+| `screens/dashboard.jsx` | KPIs, stacked area trend, YoY diverging bar, category risk matrix table |
+| `screens/deepdive.jsx` | Growth bars, spend share %, supplier count, treemap — all drill to drawer |
+| `screens/compliance.jsx` | Supplier scorecard with tier avatars, multi-filter, sort, click-to-drawer |
+| `screens/icarus.jsx` | Market signal feed, category tabs, RSS scan trigger |
+| `screens/strategy.jsx` | Kraljic, PESTEL, SWOT, negotiation frameworks — **placeholder, not wired to API** |
+| `screens/supplier.jsx` | Hades due diligence — polls `https://hades-production-b86a.up.railway.app` directly |
+| `screens/clm.jsx` | Contract scan/save, drag-drop, RiskArc gauge, clause cards, history table |
+
+---
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Healthcheck — returns transaction count |
+| GET | `/api/dashboard?year=` | KPIs, trend, categories, expiring contracts. Returns demo data if DB empty |
+| GET | `/api/suppliers` | Supplier profiles with scores, tiers, risk |
+| GET | `/api/contracts` | All scanned contracts |
+| POST | `/api/contracts/scan` | Scan PDF/DOCX — calls `lex.py` |
+| POST | `/api/contracts/save` | Scan + persist to SQLite |
+| POST | `/api/upload` | Upload spend CSV/Excel — runs full 5-stage pipeline |
+| GET | `/api/signals?days=&category=` | Icarus signals from `icarus_memory.db` |
+| POST | `/api/signals/scan` | Trigger Icarus RSS scan |
+| GET | `/api/docs` | FastAPI auto-docs (Swagger UI) |
+
+---
+
+## Demo data
+
+`_demo_dashboard(year)` in `api.py` returns realistic synthetic data when SQLite is empty. It is **year-aware** — 2022 vs 2026 returns different per-category spend from the same trend table. Year filter, YoY chart, and risk matrix all work without uploading real data.
+
+---
+
+## Routing & global patterns
+
+- Navigation: `window.location.hash` — `#dashboard`, `#clm`, `#supplier`, etc.
+- Each screen ends with `window.ScreenName = ScreenName` — `app.jsx` resolves these at render time
+- Drawer: opened via `openDrawer` prop (preferred) or `window.__openDrawer(d)` (fallback)
+- Charts/utils: exposed via `Object.assign(window, {...})` in `charts.jsx` — consumed by all screens as globals
+
+## Drawer kinds
+
+| `kind` | Required `data` fields | Opened from |
+|--------|----------------------|-------------|
+| `"contract"` | CLM result fields (riskScore, clauseFlags, etc.) | Dashboard expiry table, CLM history |
+| `"supplier"` | Supplier object (tier, score, spend, po, contract) | Compliance screen |
+| `"category"` | Category object + `trendData` + `trendYears` | Dashboard risk matrix, Deep Dive |
+| `"signal"` | Icarus signal object (relevance, summary, action) | Icarus screen |
+
+---
+
+## Topbar buttons
+
+| Button | Component | Behaviour |
+|--------|-----------|-----------|
+| ✦ Sparkles | `AIAssistant` in shell.jsx | Slide-in chat panel. Canned answers matched by keyword ("maverick", "cloud", "contract", "saving"). Quick-prompt chips. |
+| 🔔 Bell | Inline in `TopBar` | Dropdown with 5 hardcoded alerts. Clicking navigates to screen. Per-item dismiss + "mark all read". |
+| ⚙ Cog | `SettingsPanel` in shell.jsx | Dark mode toggle (real — sets `data-theme`), density selector (UI only), account info, app version |
+
+---
+
+## Known gaps / next steps
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| Strategy screen API | High | `generate()` returns hardcoded mock — wire to `POST /api/strategy` calling Claude |
+| Live notifications | Medium | Hardcoded `NOTIFICATIONS[]` in shell.jsx — replace with `GET /api/alerts` querying overdue contracts + budget overruns |
+| Real AI chat | Medium | `AIAssistant` uses keyword matching — replace with streaming `POST /api/chat` via Claude claude-sonnet-4-6 |
+| Settings density | Low | Dropdown renders but doesn't change CSS — add `data-density` attribute to `<html>` and CSS rules |
+| Risk colour deduplication | Low | `riskColor()`/`riskClass()` now in `charts.jsx` but inline objects still remain in `compliance.jsx`, `supplier.jsx`, `clm.jsx` |
+| `window.Sidebar` exports | Noise | Shell components exported to `window` but never consumed as globals — safe to remove from `Object.assign` |
+| Upload real data | Ready | "Upload Data" on Dashboard runs the full 5-stage pipeline server-side — just needs a real CSV |
+
+---
+
+## Environment
+
 ```bash
-PYTHONUTF8=1 panel serve app.py --show --autoreload
+# Local dev
+uvicorn api:app --reload --port 8000
+# Then open http://localhost:8000
+
+# Requires .env at project root:
+ANTHROPIC_API_KEY=sk-ant-...
+SPENDLENS_CLIENT=default   # optional, defaults to "default"
 ```
-→ http://localhost:5006/app
+
+**Never commit:** `.env`, `*.db`, `vendor_cache.json`, `screenshots2/` — all in `.gitignore`
+
+**Railway env vars** (set in Railway dashboard → Variables, never in git):
+- `ANTHROPIC_API_KEY`
+- `PORT` (set automatically by Railway)
 
 ---
 
-## The three systems and how they relate
+## Design system reference
 
-| System | What it does | Where it runs |
-|--------|-------------|---------------|
-| **SpendLens** | Spend analysis, compliance, supplier scorecards | Local (your machine) |
-| **Hermes** | Market intelligence crawler, RAG over signals | Railway (hermes crawler agent) |
-| **Icarus** | Telegram bot, routes commands to tools | Railway (icarus-prod) |
-
-**Current connections:**
-- SpendLens reads Hermes signals via `modules/hermes_client.py` (Upstash Redis) — partially wired
-- Icarus talks to Hermes via HTTP (`HERMES_URL` env var) — fully wired
-- SpendLens and Icarus (Telegram) have NO connection — SpendLens data is invisible to Telegram
-
-**SpendLens has its own internal "Icarus" agent (`icarus.py`)** — an RSS crawler that predates the Telegram bot. It's confusing but both exist. The goal is to replace SpendLens' internal crawler with calls to the real Hermes instead.
+- **Font:** Geist + Geist Mono (Google Fonts CDN in `index.html`)
+- **Colours:** oklch tokens — `--primary` (navy), `--good` (green), `--warn` (amber), `--bad` (red), `--info` (blue)
+- **Dark mode:** `document.documentElement.setAttribute("data-theme", "dark")` — all tokens switch automatically
+- **Layout:** CSS grid `"sb tb" / "sb main"` — 64px collapsed sidebar, 240px expanded on hover
+- **Key classes:** `.card`, `.kpi`, `.chip`, `.tag`, `.btn`, `.btn.primary`, `.ai-card`, `.ai-insight`, `.tier-av.a/b/c`, `.drop-zone`, `.spin`, `.t` (table), `.row-link`, `.page-h`, `.col`, `.grid`
 
 ---
 
-## Current architecture
+## Recent commits
 
 ```
-Browser (localhost:5006)
-    │
-    ▼
-Panel Dashboard (app.py)
-    ├── Upload pipeline
-    │   ├── column_mapper.py     (Claude Haiku — schema normalization)
-    │   ├── data_cleanup.py      (currency conversion, vendor dedup, date parsing)
-    │   ├── category_mapper.py   (Claude Haiku — vendor → category, cached in vendor_cache.json)
-    │   ├── flag_engine.py       (PO status, maverick, shadow IT, freelancer flags)
-    │   └── database.py          (SQLite insert — immutable raw + recomputable enriched)
-    │
-    ├── icarus_ui.py → icarus.py
-    │   (OWN RSS crawler — 20+ feeds, Claude Haiku signal analysis)
-    │   (should be replaced with Hermes HTTP calls)
-    │
-    ├── category_strategy_ui.py → category_strategy.py
-    │   (7 strategy frameworks via Claude Sonnet)
-    │
-    └── supplier_profiler.py
-        (ABC tier assignment, compliance scoring)
-
-Storage:
-    clients/default/spendlens.db       — 6 tables
-    clients/default/icarus_memory.db   — signals, queries, weights
-    vendor_cache.json                  — vendor→category cache (never delete)
+8b3df78 fix: code quality pass — dead code, shadow var, unused props, shared utils
+5e5fe5f fix: category drill-in drawer fully wired across Dashboard and Deep Dive
+ac0580d feat: replace spend-vs-budget chart with YoY diverging bar chart
+ef129e8 feat: replace bubble chart with CategoryRiskMatrix table
+e224f4f feat: wire topbar buttons — AI assistant, notifications, settings
+de9666a fix: SpendVsBudget bars scale absolutely across years
+6dc122b fix: year filter updates KPIs, categories and highlights chart column
+e072bee fix: risk bubble axes, category drawer, deep dive screen
+e644435 fix(railway): explicit uvicorn start command via railway.toml
+a71ddbe feat: migrate SpendLens to FastAPI + React frontend (Claude Design)
 ```
-
----
-
-## Database schema
-
-**File:** `clients/default/spendlens.db`
-
-| Table | Purpose |
-|-------|---------|
-| `uploads` | Audit log of all file uploads |
-| `transactions_raw` | Immutable source of truth (deduped by row_hash) |
-| `transactions_enriched` | Derived flags — recomputable, references raw |
-| `vendors` | Persistent vendor knowledge (category, risk, OpenCorporates data) |
-| `matches` | Accounting ↔ Procurement linking with confidence score |
-| `supplier_profiles` | ABC tier + compliance score + relationship status |
-
-Key design rule: `transactions_raw` is immutable. Never update rows there. All intelligence goes into `transactions_enriched` or `vendors`.
-
----
-
-## What works well — don't break
-
-1. **5-stage upload pipeline** — production quality, leave it alone
-2. **vendor_cache.json** — accumulated classification memory, never delete
-3. **flag_engine.py** — complex compliance logic, read fully before touching
-4. **supplier_profiler.py** — ABC tier with manual override that survives recomputation
-5. **category_strategy workbench** — 7 frameworks, HTML export, results cached in SQLite
-6. **hermes_client.py** — already reads Hermes signals from Redis, partially wired
-
----
-
-## What's missing — integration tasks
-
-### Task 1 — Replace internal RSS crawler with Hermes
-**Files:** `icarus_ui.py`, `icarus.py`
-
-When user clicks "Scan Market", call the real Hermes HTTP API instead of running `icarus.py`'s own RSS crawler.
-
-`modules/hermes_client.py` already has `get_procurement_briefing()` — wire this into the scan button handler in `icarus_ui.py`. The scan result format needs to match what `icarus_ui.py` expects (use `to_icarus_signals()` converter already in `hermes_client.py`).
-
-```python
-# hermes_client.py already has this — just call it
-signals = hermes_client.get_procurement_briefing(limit=20)
-icarus_signals = hermes_client.to_icarus_signals(signals)
-```
-
-### Task 2 — Push top vendors to Hermes watchlist on upload
-**Files:** `app.py` (upload handler ~line 200), `modules/hermes_client.py`
-
-After upload pipeline completes, extract top 20 vendors by spend → call Hermes `/watchlist/{company}` endpoint.
-
-```python
-# Add to hermes_client.py
-def watch_vendor(vendor_name: str):
-    requests.post(
-        f"{HERMES_URL}/watchlist/{vendor_name}",
-        headers={"x-api-key": HERMES_API_KEY},
-        timeout=10
-    )
-
-# Call from app.py after pipeline completes
-top_vendors = db.get_top_vendors(limit=20)
-for vendor in top_vendors:
-    hermes_client.watch_vendor(vendor["name"])
-```
-
-Result: Hermes crawls RSS every 2 hours specifically for your uploaded suppliers.
-
-### Task 3 — Expose SpendLens data as Icarus Telegram tools
-**New file:** `api.py` — FastAPI wrapper around `database.py`
-
-Endpoints needed:
-```
-GET /spend/summary          — total spend by category, current period
-GET /spend/maverick         — maverick spend transactions
-GET /vendors/top            — top vendors by spend + compliance scores
-GET /vendors/{name}         — single vendor profile
-GET /health                 — liveness check
-```
-
-Then add `bot/skills/spendlens.py` in the Icarus repo with tools that call this API. Telegram bot can then answer "what's our Cloud spend this month?" from SpendLens data.
-
-### Task 4 — Show Hermes signals per vendor in SpendLens dashboard (optional)
-In the vendor detail view, fetch `GET /query/{vendor_name}` from Hermes and show the last 5 signals inline. Gives market context next to spend data without leaving SpendLens.
-
-### Task 5 — Deploy SpendLens to Railway (later)
-- SQLite → Postgres (Railway provides this natively)
-- `panel serve app.py` → deploy as Railway service
-- Multi-client support already built (`clients/{name}/spendlens.db`)
-
----
-
-## Environment variables
-
-**File:** `.env` at project root
-
-```
-ANTHROPIC_API_KEY=...           # Claude API
-XAI_API_KEY=...                 # Grok live search (optional)
-UPSTASH_REDIS_REST_URL=...      # Same Upstash as Icarus bot
-UPSTASH_REDIS_REST_TOKEN=...    # Same Upstash as Icarus bot
-HERMES_URL=...                  # ADD THIS — Hermes Railway URL
-HERMES_API_KEY=...              # ADD THIS — Hermes API key
-```
-
-Get `HERMES_URL` and `HERMES_API_KEY` from Railway → hermes crawler agent → Variables.
-
----
-
-## Claude model usage
-
-| Task | Model | Reason |
-|------|-------|--------|
-| Column mapping | `claude-haiku-4-5-20251001` | Fast, cheap, rule-based fallback |
-| Vendor classification | `claude-haiku-4-5-20251001` | Batched, cached after first run |
-| Signal analysis | `claude-haiku-4-5-20251001` | High volume batches |
-| NL queries | `claude-sonnet-4-6` | Complex reasoning |
-| Strategy frameworks | `claude-sonnet-4-6` | Long-form generation |
-
-Do NOT upgrade haiku tasks to sonnet — batch volumes make cost spike significantly.
-
----
-
-## What NOT to do
-
-- Don't delete `vendor_cache.json` — accumulated classification memory
-- Don't modify `transactions_raw` rows — immutable by design
-- Don't replace Panel with another UI framework — too much state tied to Panel widgets
-- Don't add LangChain — Claude native tool use is cleaner and already in place
-- Don't add n8n — Railway + GitHub Actions already handles orchestration
-- Don't merge SpendLens' internal `icarus.py` with the Telegram bot — replace it with Hermes calls instead

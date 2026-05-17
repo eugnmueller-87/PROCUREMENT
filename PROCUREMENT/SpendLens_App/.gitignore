@@ -67,6 +67,9 @@ test-datasets/
 handover/
 readmeGit.md
 
+# ── Screenshots — local reference only, never commit ─────────────────────────
+screenshots2/
+
 # ── Logs & temp ───────────────────────────────────────────────────────────────
 *.log
 *.tmp
