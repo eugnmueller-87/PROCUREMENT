@@ -65,7 +65,7 @@ function App() {
       <div onMouseEnter={() => setSbExpanded(true)} style={{ gridArea: "sb", display: "contents" }}>
         <Sidebar active={route} onNav={nav} />
       </div>
-      <TopBar active={route} onOpenCmd={() => setCmdOpen(true)} onMenu={() => setSbExpanded(s => !s)} />
+      <TopBar active={route} onOpenCmd={() => setCmdOpen(true)} onMenu={() => setSbExpanded(s => !s)} onNav={nav} />
       <main className="main">
         {Screen
           ? <Screen openDrawer={openDrawer} api={API} />
