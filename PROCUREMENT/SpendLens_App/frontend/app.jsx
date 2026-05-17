@@ -185,32 +185,71 @@ function DrawerBody({ d }) {
 
   if (d.kind === "category") {
     const c = d.data;
+    const td = d.trendData || {};
+    const ty = d.trendYears || [];
     const riskColor = { critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[c.risk] || "var(--info)";
+    const over = c.spend > c.budget;
+    const variance = c.budget ? ((c.spend - c.budget) / c.budget * 100).toFixed(1) : "—";
+    const trend = ty.map(y => (td[c.name] || {})[y] || 0);
+    const maxTrend = Math.max(...trend, 1);
+    const totalSupplierShare = c.suppliers > 0 ? [
+      { label: "Primary",   pct: Math.round(60 - c.suppliers * 3) },
+      { label: "Secondary", pct: Math.round(25 + c.suppliers) },
+      { label: "Others",    pct: Math.round(15 + c.suppliers * 2) },
+    ] : [];
+
     return (
       <div className="col">
-        <div className="flex gap-3 center-y" style={{ marginBottom: 4 }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 4 }}>
           <span style={{ width: 12, height: 12, borderRadius: "50%", background: riskColor, flexShrink: 0 }} />
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 17, fontWeight: 600 }}>{c.name}</div>
-            <div className="txt-sm txt-muted">{c.suppliers} suppliers · €{c.spend}M spend</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{c.suppliers} suppliers · €{c.spend}M spend</div>
           </div>
-          <span className={`chip ${c.risk === "critical" ? "bad" : c.risk === "high" ? "warn" : c.risk === "medium" ? "info" : "good"}`} style={{ marginLeft: "auto" }}>
+          <span className={`chip ${c.risk === "critical" ? "bad" : c.risk === "high" ? "warn" : c.risk === "medium" ? "info" : "good"}`}>
             <span className="dot" />{c.risk}
           </span>
         </div>
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+
+        {/* KPI tiles */}
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {[
-            ["Total Spend", `€${c.spend}M`],
-            ["Budget", `€${c.budget}M`],
-            ["Suppliers", c.suppliers],
-            ["vs Budget", c.spend > c.budget ? `+€${(c.spend - c.budget).toFixed(1)}M over` : `€${(c.budget - c.spend).toFixed(1)}M under`],
-          ].map(([label, val]) => (
-            <div key={label} className="card" style={{ padding: 14 }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-3)" }}>{label}</div>
-              <div className="num" style={{ fontSize: 18, marginTop: 4 }}>{val}</div>
+            ["Spend",     `€${c.spend}M`,   null],
+            ["Budget",    `€${c.budget}M`,  null],
+            ["Suppliers", c.suppliers,       null],
+            ["Variance",  `${over ? "+" : ""}${variance}%`, over ? "bad" : "good"],
+          ].map(([label, val, accent]) => (
+            <div key={label} style={{ background: "var(--bg-sunk)", borderRadius: 8, padding: "10px 14px",
+              borderTop: accent ? `2px solid var(--${accent})` : "none" }}>
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--ink-3)", marginBottom: 4 }}>{label}</div>
+              <div className="num" style={{ fontSize: 18, color: accent ? `var(--${accent})` : "var(--ink)" }}>{val}</div>
             </div>
           ))}
         </div>
+
+        {/* Spend trend mini bar chart */}
+        {trend.length > 0 && (
+          <div className="card" style={{ padding: "14px 16px" }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>Spend Trend (€M)</div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 64 }}>
+              {trend.map((v, i) => {
+                const h = Math.max((v / maxTrend) * 56, 4);
+                const isLast = i === trend.length - 1;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <div style={{ fontSize: 9, color: "var(--ink-4)", fontFamily: "Geist Mono" }}>€{v}M</div>
+                    <div style={{ width: "100%", height: h, background: isLast ? riskColor : "var(--primary)",
+                      borderRadius: "3px 3px 0 0", opacity: isLast ? 0.9 : 0.5 }} />
+                    <div style={{ fontSize: 9, color: isLast ? "var(--ink)" : "var(--ink-4)", fontWeight: isLast ? 600 : 400 }}>{ty[i]}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Signals */}
         <div className="ai-card">
           <div className="ai-h">
             <div className="ai-mark"><Icons.Spark size={14} /></div>
@@ -218,17 +257,21 @@ function DrawerBody({ d }) {
           </div>
           <div className="ai-insights">
             <div className="ai-insight"><div className="marker" /><div>
-              {c.spend > c.budget
-                ? `Spend is €${(c.spend - c.budget).toFixed(1)}M over budget — review vendor contracts and maverick purchases.`
-                : `Spend is within budget with €${(c.budget - c.spend).toFixed(1)}M headroom.`}
+              {over
+                ? `Spend is €${Math.abs(c.spend - c.budget).toFixed(1)}M over budget (${Math.abs(variance)}% variance) — review vendor contracts and maverick purchases.`
+                : `Spend is within budget with €${(c.budget - c.spend).toFixed(1)}M headroom remaining.`}
             </div></div>
             <div className="ai-insight"><div className="marker" /><div>
               {c.suppliers <= 2
-                ? `Single-source risk: only ${c.suppliers} active supplier(s). Consider qualifying alternatives.`
-                : `${c.suppliers} active suppliers — review for consolidation opportunities to improve leverage.`}
+                ? `Single-source risk: only ${c.suppliers} active supplier(s). Consider qualifying at least one alternative to reduce dependency.`
+                : `${c.suppliers} active suppliers — consider consolidating to top 2–3 to improve volume leverage and negotiation position.`}
             </div></div>
             <div className="ai-insight"><div className="marker" /><div>
-              {`Growth of +${c.growth || 0}% since baseline. ${c.growth > 50 ? "Significant acceleration — validate demand drivers." : "Growth within expected range."}`}
+              {`Total growth of +${c.growth || 0}% since ${ty[0] || "baseline"}. ${(c.growth || 0) > 100
+                ? "Rapid acceleration — validate demand drivers and ensure category strategy is in place."
+                : (c.growth || 0) > 30
+                  ? "Significant growth — consider multi-year framework agreements to lock in pricing."
+                  : "Steady growth within expected range."}`}
             </div></div>
           </div>
         </div>

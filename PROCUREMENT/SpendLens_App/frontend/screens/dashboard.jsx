@@ -123,8 +123,8 @@ function Dashboard({ openDrawer, api }) {
 
       {/* Risk matrix table */}
       <div className="card">
-        <div className="card-h"><h3>Category Risk Matrix</h3><span className="sub">spend · risk · supplier count · budget variance</span></div>
-        <CategoryRiskMatrix categories={categories} />
+        <div className="card-h"><h3>Category Risk Matrix</h3><span className="sub">spend · risk · supplier count · budget variance · click to drill in</span></div>
+        <CategoryRiskMatrix categories={categories} onPick={c => openDrawer({ kind: "category", data: c, trendData, trendYears })} />
       </div>
 
       {/* Expiring contracts */}
@@ -235,7 +235,7 @@ function YoYBarChart({ categories, trendYears, trendData, selectedYear }) {
   );
 }
 
-function CategoryRiskMatrix({ categories }) {
+function CategoryRiskMatrix({ categories, onPick }) {
   const totalSpend = (categories || []).reduce((s, c) => s + c.spend, 0) || 1;
   const maxSpend = Math.max(...(categories || []).map(c => c.spend), 1);
 
@@ -276,7 +276,8 @@ function CategoryRiskMatrix({ categories }) {
             const sharePct = (c.spend / totalSpend * 100).toFixed(1);
 
             return (
-              <tr key={c.id} style={{ borderLeft: `3px solid ${cfg.color}` }}>
+              <tr key={c.id} style={{ borderLeft: `3px solid ${cfg.color}`, cursor: "pointer" }}
+                onClick={() => onPick && onPick(c)}>
                 <td style={{ fontWeight: 500, fontSize: 13 }}>{c.name}</td>
                 <td>
                   <span className={`chip ${cfg.cls}`} style={{ fontSize: 11 }}>

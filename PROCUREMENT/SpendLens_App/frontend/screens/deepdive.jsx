@@ -5,6 +5,7 @@ function DeepDive({ openDrawer, api }) {
   const [data, setData] = useS(null);
   const [loading, setLoading] = useS(true);
   const [selected, setSelected] = useS(null);
+  const openDrawer = (d) => window.__openDrawer && window.__openDrawer(d);
 
   useE(() => {
     fetch(`${api}/api/dashboard`)
@@ -31,7 +32,7 @@ function DeepDive({ openDrawer, api }) {
   const totalSpend = (categories || []).reduce((s, c) => s + c.spend, 0) || 1;
 
   const handleCatClick = (cat) => {
-    setSelected(cat.id === selected?.id ? null : cat);
+    openDrawer({ kind: "category", data: cat, trendData, trendYears });
   };
 
   return (
@@ -125,9 +126,6 @@ function DeepDive({ openDrawer, api }) {
         </div>
       </div>
 
-      {/* Category detail panel — shown when a category is selected */}
-      {selected && <CategoryDetail cat={selected} trendYears={trendYears} trendData={trendData} onClose={() => setSelected(null)} />}
-
       {/* Treemap */}
       <div className="card">
         <div className="card-h"><h3>Spend by Category × Risk</h3><span className="sub">click to drill in</span></div>
@@ -136,8 +134,7 @@ function DeepDive({ openDrawer, api }) {
           height={360}
           onPick={(item) => {
             const cat = (categories || []).find(c => c.id === item.id);
-            if (cat) setSelected(cat);
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            if (cat) openDrawer({ kind: "category", data: cat, trendData, trendYears });
           }}
         />
       </div>
