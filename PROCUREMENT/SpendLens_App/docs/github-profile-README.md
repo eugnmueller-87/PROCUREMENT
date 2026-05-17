@@ -16,17 +16,12 @@ Currently completing the **AI Integration Bootcamp @ Ironhack Berlin** (Week 5 o
 
 *AI-powered tools built from 10+ years of hands-on procurement experience — targeting the exact pain points category managers, CPOs, and procurement ops teams face daily.*
 
-### 🔴 [SpendLens](https://github.com/eugnmueller-87/PROCUREMENT)
-Full-stack AI procurement intelligence platform. React 18 SPA served by FastAPI. Ingests any spend file (CSV, Excel, SAP/Coupa), auto-maps messy columns via Claude, runs a 5-stage pipeline: column mapping → data cleanup → vendor classification → compliance flagging → supplier intelligence. Dashboard with year-aware KPIs, YoY diverging bar chart, Category Risk Matrix, 5-year stacked area trend. Deep Dive with spend growth, treemap, drill-in category drawers. EcoVadis-style Compliance Scorecard (26 suppliers, ABC tiers, multi-filter). AI contract clause extraction with RiskArc gauge and renewal tracking (CLM). Category Strategy workbench — 7 AI frameworks (Kraljic, PESTEL, SWOT, Porter's, TCO, Negotiation Levers, 3-year Recommendation) + 10-slide HTML export. Icarus AI market signal feed with category tabs and Hermes integration. Deployed live on Railway.
-
-### 🔁 [Autonomous Procurement Triage Agent](https://github.com/eugnmueller-87/Triage-Agent)
-End-to-end autonomous agent replacing manual PR triage. 5-tier routing by value (under €5k auto-approve → over €100k full RFP). Supplier NDA/DPA/MSA compliance check on every request via RAG. Guided business case builder for high-value purchases. RFQ/RFP document generation, multi-supplier outreach, quote collection, evaluation matrix, award recommendation. 6 importable n8n workflows.
-
-### 🔍 [Hermes — Market Intelligence Sub-Agent](https://github.com/eugnmueller-87/Hermes)
-Autonomous sub-agent deployed on Railway. Crawls ~590 tech/procurement suppliers across 17 categories via 5 scheduled crawlers (RSS, EDGAR, Tavily, Jobs, Earnings transcripts). 11 signal types classified by Claude Haiku: NEW / CONTINUING / RESOLVED with delta tracking. Semantic RAG search via Upstash Vector (1024-dim BGE). Macro theme clustering. Trend memory per supplier. Powers SpendLens Icarus AI with live market signals injected on every scan.
-
-### ⚡ [Hades — Supplier Due Diligence Agent](https://github.com/eugnmueller-87/Hades)
-Production-deployed autonomous DD agent. POST a company name → full risk report in under 2 minutes. 6 parallel LangGraph nodes: OFAC SDN + UN SC sanctions (free XML, no key), NorthData company registry, BAFA/NCP/NGO LkSG/CSDDD compliance signals, ESG & labour risk, 90-day news sentiment, Hermes market intelligence. Claude Sonnet 4.6 synthesises into weighted risk score (1–10) + recommendation: Approve / Conditional Approval / Block. Auto-registers every supplier to Hermes watchlist for ongoing monitoring. Integrated into SpendLens Supplier DD screen with live status badge and 10-step pipeline tracker.
+| Project | Description | GitHub |
+|---|---|---|
+| 🔴 **SpendLens** | Full-stack AI procurement intelligence platform. React 18 SPA + FastAPI. 5-stage AI pipeline: column mapping → cleanup → vendor classification → compliance flagging → supplier intelligence. 7 screens: Dashboard, Deep Dive, Compliance Scorecard, CLM, Icarus AI, Supplier DD, Category Strategy. Deployed live on Railway. | [Link](https://github.com/eugnmueller-87/PROCUREMENT) |
+| 🔁 **Triage Agent** | Autonomous agent replacing manual PR triage. 5-tier value routing, supplier NDA/DPA/MSA compliance check via RAG, RFQ/RFP generation, multi-supplier outreach, evaluation matrix, award recommendation. 6 importable n8n workflows. | [Link](https://github.com/eugnmueller-87/Triage-Agent) |
+| 🔍 **Hermes** | Market intelligence sub-agent on Railway. Crawls 590+ suppliers across 17 categories via 5 crawlers (RSS, EDGAR, Tavily, Jobs, Earnings). Signals classified by Claude Haiku with delta tracking. Semantic RAG via Upstash Vector. Powers SpendLens Icarus AI. | [Link](https://github.com/eugnmueller-87/Hermes) |
+| ⚡ **Hades** | Supplier due diligence agent. POST a company name, get a full risk report in under 2 minutes. 6 parallel LangGraph nodes: OFAC/UN sanctions, NorthData registry, LkSG/CSDDD signals, ESG, news sentiment, Hermes intel. Risk score 1–10 + Approve/Block recommendation. Integrated into SpendLens. | [Link](https://github.com/eugnmueller-87/Hades) |
 
 ---
 
