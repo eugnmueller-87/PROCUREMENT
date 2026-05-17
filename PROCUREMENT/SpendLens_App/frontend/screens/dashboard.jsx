@@ -121,21 +121,10 @@ function Dashboard({ openDrawer, api }) {
         </div>
       </div>
 
-      {/* Risk map */}
+      {/* Risk matrix table */}
       <div className="card">
-        <div className="card-h"><h3>Risk Map — Category Share of Total Spend</h3><span className="sub">bubble size = no. of suppliers</span></div>
-        <RiskBubble
-          data={(categories || []).map((c, i) => ({
-            name: c.name,
-            x: c.spend,
-            y: { critical: 9, high: 7, medium: 4, low: 2 }[c.risk] || 4,
-            r: c.suppliers || 3,
-            risk: c.risk || "medium",
-          }))}
-          height={320}
-          xLabel="Spend (€M)"
-          yLabel="Risk Level"
-        />
+        <div className="card-h"><h3>Category Risk Matrix</h3><span className="sub">spend · risk · supplier count · budget variance</span></div>
+        <CategoryRiskMatrix categories={categories} />
       </div>
 
       {/* Expiring contracts */}
@@ -182,6 +171,89 @@ function KpiCard({ label, value, sub, accent }) {
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{value}</div>
       <div className="kpi-foot"><span>{sub}</span></div>
+    </div>
+  );
+}
+
+function CategoryRiskMatrix({ categories }) {
+  const totalSpend = (categories || []).reduce((s, c) => s + c.spend, 0) || 1;
+  const maxSpend = Math.max(...(categories || []).map(c => c.spend), 1);
+
+  const riskRank = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sorted = [...(categories || [])].sort((a, b) => {
+    const rd = riskRank[a.risk] - riskRank[b.risk];
+    return rd !== 0 ? rd : b.spend - a.spend;
+  });
+
+  const riskCfg = {
+    critical: { label: "Critical", cls: "bad",  bg: "var(--bad-soft)",  color: "var(--bad)" },
+    high:     { label: "High",     cls: "warn",  bg: "var(--warn-soft)", color: "var(--warn)" },
+    medium:   { label: "Medium",   cls: "info",  bg: "var(--info-soft)", color: "var(--info)" },
+    low:      { label: "Low",      cls: "good",  bg: "var(--good-soft)", color: "var(--good)" },
+  };
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table className="t" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={{ width: 180 }}>Category</th>
+            <th>Risk</th>
+            <th style={{ width: 200 }}>Spend vs Budget</th>
+            <th className="num">Spend</th>
+            <th className="num">Share</th>
+            <th className="num">Suppliers</th>
+            <th className="num">Variance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((c, i) => {
+            const cfg = riskCfg[c.risk] || riskCfg.medium;
+            const spendPct = (c.spend / maxSpend) * 100;
+            const budgetPct = (c.budget / maxSpend) * 100;
+            const over = c.spend > c.budget;
+            const variance = c.budget ? ((c.spend - c.budget) / c.budget * 100).toFixed(1) : 0;
+            const sharePct = (c.spend / totalSpend * 100).toFixed(1);
+
+            return (
+              <tr key={c.id} style={{ borderLeft: `3px solid ${cfg.color}` }}>
+                <td style={{ fontWeight: 500, fontSize: 13 }}>{c.name}</td>
+                <td>
+                  <span className={`chip ${cfg.cls}`} style={{ fontSize: 11 }}>
+                    <span className="dot" />{cfg.label}
+                  </span>
+                </td>
+                <td>
+                  {/* Inline spend vs budget bar */}
+                  <div style={{ position: "relative", height: 18, background: "var(--bg-sunk)", borderRadius: 3, minWidth: 120 }}>
+                    {/* Budget marker */}
+                    <div style={{ position: "absolute", left: `${budgetPct}%`, top: -2, bottom: -2, width: 2, background: "var(--ink-3)", opacity: 0.35, zIndex: 2 }} />
+                    {/* Spend bar */}
+                    <div style={{
+                      position: "absolute", left: 0, top: 0, bottom: 0,
+                      width: `${Math.min(spendPct, budgetPct)}%`,
+                      background: "var(--primary)", borderRadius: "3px 0 0 3px",
+                    }} />
+                    {over && (
+                      <div style={{
+                        position: "absolute", left: `${budgetPct}%`, top: 0, bottom: 0,
+                        width: `${spendPct - budgetPct}%`,
+                        background: "var(--bad)", borderRadius: "0 3px 3px 0",
+                      }} />
+                    )}
+                  </div>
+                </td>
+                <td className="num" style={{ fontWeight: 600 }}>€{c.spend}M</td>
+                <td className="num" style={{ color: "var(--ink-3)" }}>{sharePct}%</td>
+                <td className="num">{c.suppliers}</td>
+                <td className="num" style={{ color: over ? "var(--bad)" : "var(--good)", fontWeight: 500 }}>
+                  {over ? "+" : ""}{variance}%
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
