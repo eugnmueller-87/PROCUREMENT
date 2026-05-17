@@ -1,5 +1,12 @@
 // SpendLens — SVG chart primitives
 
+// Shared risk utilities — used by all screens
+const RISK_COLOR = { critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" };
+const RISK_CLASS = { critical: "bad", high: "warn", medium: "info", low: "good", Critical: "bad", High: "warn", Medium: "info", Low: "good" };
+const riskColor = (r) => RISK_COLOR[r] || "var(--ink-3)";
+const riskClass = (r) => RISK_CLASS[r] || "info";
+const riskChip  = (r) => `<span class="chip ${riskClass(r)}"><span class="dot"></span>${r}</span>`;
+
 const fmtK = (n) => {
   if (n == null) return "";
   if (Math.abs(n) >= 1000) return "€" + (n / 1000).toFixed(1) + "M";
@@ -117,7 +124,7 @@ function SpendVsBudget({ data, height = 320, absMax = null }) {
 }
 
 // ── Bubble / Risk Map ──────────────────────────────────────────────────────────
-function RiskBubble({ data, height = 320, xLabel = "Spend (€M)", yLabel = "Risk Level" }) {
+function RiskBubble({ data, height = 320, xLabel = "Spend (€M)" }) {
   const w = 720, h = height - 30;
   const padL = 56, padR = 20, padT = 20, padB = 40;
   const innerW = w - padL - padR, innerH = h - padT - padB;
@@ -306,4 +313,4 @@ function Waterfall({ data, height = 260 }) {
   );
 }
 
-Object.assign(window, { Sparkline, StackedArea, SpendVsBudget, RiskBubble, Treemap, Donut, RiskArc, Waterfall, fmtK, fmtM });
+Object.assign(window, { Sparkline, StackedArea, SpendVsBudget, RiskBubble, Treemap, Donut, RiskArc, Waterfall, fmtK, fmtM, riskColor, riskClass, RISK_COLOR, RISK_CLASS });

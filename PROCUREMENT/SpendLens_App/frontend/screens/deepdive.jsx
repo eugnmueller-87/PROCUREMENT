@@ -4,8 +4,6 @@ const { useState: useS, useEffect: useE } = React;
 function DeepDive({ openDrawer, api }) {
   const [data, setData] = useS(null);
   const [loading, setLoading] = useS(true);
-  const [selected, setSelected] = useS(null);
-  const openDrawer = (d) => window.__openDrawer && window.__openDrawer(d);
 
   useE(() => {
     fetch(`${api}/api/dashboard`)
@@ -19,6 +17,10 @@ function DeepDive({ openDrawer, api }) {
 
   const { categories, trendYears, trendData } = data;
 
+  const drillIn = (cat) => openDrawer({ kind: "category", data: cat, trendData, trendYears });
+
+  const totalSpend = (categories || []).reduce((s, c) => s + c.spend, 0) || 1;
+
   // Category growth: first year vs last year
   const growthData = (categories || []).slice(0, 10).map(c => {
     const years = trendYears || [];
@@ -27,13 +29,6 @@ function DeepDive({ openDrawer, api }) {
     const growth = first ? Math.round((last - first) / first * 100) : 0;
     return { ...c, from: first, to: last, growth };
   });
-
-  // Vendor concentration: top 3 suppliers per category (mock from category spend)
-  const totalSpend = (categories || []).reduce((s, c) => s + c.spend, 0) || 1;
-
-  const handleCatClick = (cat) => {
-    openDrawer({ kind: "category", data: cat, trendData, trendYears });
-  };
 
   return (
     <div className="col">
@@ -78,16 +73,15 @@ function DeepDive({ openDrawer, api }) {
         <div className="card">
           <div className="card-h"><h3>Spend Share by Category</h3><span className="sub">% of total · click to drill in</span></div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {(categories || []).map((c, i) => {
+            {(categories || []).map(c => {
               const pct = (c.spend / totalSpend) * 100;
-              const isSelected = selected?.id === c.id;
               const riskColor = { critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[c.risk] || "var(--info)";
               return (
-                <div key={c.id} onClick={() => handleCatClick(c)}
+                <div key={c.id} onClick={() => drillIn(c)}
                   style={{ display: "grid", gridTemplateColumns: "140px 1fr 48px 42px", gap: 10, alignItems: "center", fontSize: 12,
-                    padding: "6px 8px", borderRadius: 6, cursor: "pointer",
-                    background: isSelected ? "var(--primary-soft)" : "transparent",
-                    border: isSelected ? "1px solid var(--primary)" : "1px solid transparent" }}>
+                    padding: "6px 8px", borderRadius: 6, cursor: "pointer" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--bg-sunk)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <div style={{ color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: riskColor, flexShrink: 0 }} />
                     {c.name}
@@ -134,97 +128,9 @@ function DeepDive({ openDrawer, api }) {
           height={360}
           onPick={(item) => {
             const cat = (categories || []).find(c => c.id === item.id);
-            if (cat) openDrawer({ kind: "category", data: cat, trendData, trendYears });
+            if (cat) drillIn(cat);
           }}
         />
-      </div>
-    </div>
-  );
-}
-
-function CategoryDetail({ cat, trendYears, trendData, onClose }) {
-  const trend = trendYears?.map(y => (trendData[cat.name] || {})[y] || 0) || [];
-  const riskColor = { critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[cat.risk] || "var(--info)";
-
-  // Simulated top vendors (in real app these come from /api/dashboard per-category)
-  const mockVendors = [
-    { name: "Primary Supplier",   share: 42, spend: (cat.spend * 0.42).toFixed(1) },
-    { name: "Secondary Supplier", share: 28, spend: (cat.spend * 0.28).toFixed(1) },
-    { name: "Tertiary Supplier",  share: 18, spend: (cat.spend * 0.18).toFixed(1) },
-    { name: "Others",             share: 12, spend: (cat.spend * 0.12).toFixed(1) },
-  ];
-
-  const hhi = mockVendors.reduce((s, v) => s + (v.share / 100) ** 2, 0);
-  const hhiLabel = hhi > 0.25 ? "High concentration" : hhi > 0.15 ? "Moderate" : "Competitive";
-  const hhiColor = hhi > 0.25 ? "var(--bad)" : hhi > 0.15 ? "var(--warn)" : "var(--good)";
-
-  const growth = trend.length > 1 ? Math.round((trend[trend.length-1] - trend[0]) / (trend[0] || 1) * 100) : 0;
-
-  return (
-    <div className="card" style={{ borderTop: `3px solid ${riskColor}` }}>
-      <div className="card-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: riskColor }} />
-          <h3>{cat.name}</h3>
-          <span className={`chip ${cat.risk === "critical" ? "bad" : cat.risk === "high" ? "warn" : cat.risk === "medium" ? "info" : "good"}`}>
-            <span className="dot" />{cat.risk}
-          </span>
-        </div>
-        <button className="btn" onClick={onClose} style={{ fontSize: 11 }}>Close ×</button>
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-        {[
-          ["Total Spend", `€${cat.spend}M`],
-          ["Suppliers", cat.suppliers],
-          ["Spend Growth", `+${growth}%`],
-          ["HHI Concentration", hhiLabel],
-        ].map(([label, val]) => (
-          <div key={label} style={{ background: "var(--bg-sunk)", borderRadius: 8, padding: "10px 14px" }}>
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-3)", marginBottom: 4 }}>{label}</div>
-            <div className="num" style={{ fontSize: 16, color: label === "HHI Concentration" ? hhiColor : "var(--ink)" }}>{val}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Spend trend sparkline */}
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, color: "var(--ink-2)" }}>Spend Trend (€M)</div>
-          <div style={{ display: "flex", align: "flex-end", gap: 6 }}>
-            {trend.map((v, i) => {
-              const maxV = Math.max(...trend, 1);
-              const hPct = (v / maxV) * 80;
-              return (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                  <div style={{ fontSize: 9, color: "var(--ink-4)", fontFamily: "Geist Mono" }}>€{v}M</div>
-                  <div style={{ width: "100%", height: `${Math.max(hPct, 4)}px`, background: riskColor, borderRadius: "3px 3px 0 0", opacity: 0.75 }} />
-                  <div style={{ fontSize: 9, color: "var(--ink-3)" }}>{(trendYears || [])[i]}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Vendor concentration */}
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, color: "var(--ink-2)" }}>
-            Vendor Concentration
-            <span style={{ marginLeft: 8, fontSize: 11, color: hhiColor }}>{hhiLabel}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {mockVendors.map((v, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 120px 48px", gap: 8, alignItems: "center", fontSize: 12 }}>
-                <div style={{ color: "var(--ink-2)", fontSize: 11 }}>{v.name}</div>
-                <div style={{ position: "relative", height: 16, background: "var(--bg-sunk)", borderRadius: 3 }}>
-                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${v.share}%`,
-                    background: i === 0 ? riskColor : "var(--primary)", borderRadius: 3, opacity: i === 0 ? 0.8 : 0.5 }} />
-                </div>
-                <div className="num" style={{ textAlign: "right", fontSize: 11, color: "var(--ink-3)" }}>€{v.spend}M</div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
