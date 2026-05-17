@@ -3,7 +3,7 @@
 # SpendLens
 ### AI-Powered Procurement Intelligence
 
-**Live:** [procurement-production-f940.up.railway.app](https://procurement-production-f940.up.railway.app)
+**Status:** Live on Railway (URL available on request)
 
 > *Procurement has been running on static reports and manual analysis for decades. SpendLens changes that.*
 
