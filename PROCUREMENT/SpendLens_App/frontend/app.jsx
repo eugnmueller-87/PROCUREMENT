@@ -183,6 +183,59 @@ function DrawerBody({ d }) {
     );
   }
 
+  if (d.kind === "category") {
+    const c = d.data;
+    const riskColor = { critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[c.risk] || "var(--info)";
+    return (
+      <div className="col">
+        <div className="flex gap-3 center-y" style={{ marginBottom: 4 }}>
+          <span style={{ width: 12, height: 12, borderRadius: "50%", background: riskColor, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 600 }}>{c.name}</div>
+            <div className="txt-sm txt-muted">{c.suppliers} suppliers · €{c.spend}M spend</div>
+          </div>
+          <span className={`chip ${c.risk === "critical" ? "bad" : c.risk === "high" ? "warn" : c.risk === "medium" ? "info" : "good"}`} style={{ marginLeft: "auto" }}>
+            <span className="dot" />{c.risk}
+          </span>
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {[
+            ["Total Spend", `€${c.spend}M`],
+            ["Budget", `€${c.budget}M`],
+            ["Suppliers", c.suppliers],
+            ["vs Budget", c.spend > c.budget ? `+€${(c.spend - c.budget).toFixed(1)}M over` : `€${(c.budget - c.spend).toFixed(1)}M under`],
+          ].map(([label, val]) => (
+            <div key={label} className="card" style={{ padding: 14 }}>
+              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-3)" }}>{label}</div>
+              <div className="num" style={{ fontSize: 18, marginTop: 4 }}>{val}</div>
+            </div>
+          ))}
+        </div>
+        <div className="ai-card">
+          <div className="ai-h">
+            <div className="ai-mark"><Icons.Spark size={14} /></div>
+            <div><div className="ai-title">Category Signals</div></div>
+          </div>
+          <div className="ai-insights">
+            <div className="ai-insight"><div className="marker" /><div>
+              {c.spend > c.budget
+                ? `Spend is €${(c.spend - c.budget).toFixed(1)}M over budget — review vendor contracts and maverick purchases.`
+                : `Spend is within budget with €${(c.budget - c.spend).toFixed(1)}M headroom.`}
+            </div></div>
+            <div className="ai-insight"><div className="marker" /><div>
+              {c.suppliers <= 2
+                ? `Single-source risk: only ${c.suppliers} active supplier(s). Consider qualifying alternatives.`
+                : `${c.suppliers} active suppliers — review for consolidation opportunities to improve leverage.`}
+            </div></div>
+            <div className="ai-insight"><div className="marker" /><div>
+              {`Growth of +${c.growth || 0}% since baseline. ${c.growth > 50 ? "Significant acceleration — validate demand drivers." : "Growth within expected range."}`}
+            </div></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (d.kind === "signal") {
     const s = d.data;
     return (

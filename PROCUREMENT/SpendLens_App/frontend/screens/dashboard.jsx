@@ -127,12 +127,14 @@ function Dashboard({ openDrawer, api }) {
         <RiskBubble
           data={(categories || []).map((c, i) => ({
             name: c.name,
-            x: (i + 1) * 3,
-            y: c.spend,
+            x: c.spend,
+            y: { critical: 9, high: 7, medium: 4, low: 2 }[c.risk] || 4,
             r: c.suppliers || 3,
             risk: c.risk || "medium",
           }))}
           height={320}
+          xLabel="Spend (€M)"
+          yLabel="Risk Level"
         />
       </div>
 

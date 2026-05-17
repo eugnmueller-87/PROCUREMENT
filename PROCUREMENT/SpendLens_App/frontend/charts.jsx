@@ -105,34 +105,71 @@ function SpendVsBudget({ data, height = 320 }) {
 }
 
 // ── Bubble / Risk Map ──────────────────────────────────────────────────────────
-function RiskBubble({ data, height = 320 }) {
+function RiskBubble({ data, height = 320, xLabel = "Spend (€M)", yLabel = "Risk Level" }) {
   const w = 720, h = height - 30;
-  const padL = 50, padR = 16, padT = 12, padB = 32;
+  const padL = 56, padR = 20, padT = 20, padB = 40;
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const maxX = Math.max(...data.map(d => d.x || 0), 1) * 1.15;
-  const maxY = Math.max(...data.map(d => d.y || 0), 1) * 1.1;
+  // Y axis: 0–10 risk scale
+  const maxY = 10;
   const maxR = Math.max(...data.map(d => d.r || 0), 1);
   const colorFor = (r) => ({ critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[r] || "var(--ink-3)");
   const sx = (v) => padL + (v / maxX) * innerW;
   const sy = (v) => padT + innerH - (v / maxY) * innerH;
+
+  // Y-axis tick labels
+  const yTicks = [
+    { v: 2, label: "Low" },
+    { v: 4, label: "Medium" },
+    { v: 7, label: "High" },
+    { v: 9, label: "Critical" },
+  ];
+
+  // Danger zone: high spend (right 40%) + high risk (top 50%)
+  const dangerX = sx(maxX * 0.6);
+  const dangerY = sy(6);
+
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height, overflow: "visible" }}>
-      <rect x={sx(maxX * 0.55)} y={padT} width={innerW - sx(maxX * 0.55) + padL} height={innerH * 0.5} fill="var(--bad-soft)" opacity="0.4" rx="6" />
-      <text x={w - padR - 8} y={padT + 14} fontSize="10" textAnchor="end" fill="var(--bad)" fontWeight="500">DANGER ZONE</text>
-      {[0, 0.25, 0.5, 0.75, 1].map(t => (
-        <line key={t} x1={padL} x2={w - padR} y1={padT + t * innerH} y2={padT + t * innerH} stroke="var(--hairline)" />
+      {/* Danger zone */}
+      <rect x={dangerX} y={padT} width={w - padR - dangerX} height={dangerY - padT} fill="var(--bad-soft)" opacity="0.35" rx="4" />
+      <text x={w - padR - 6} y={padT + 14} fontSize="10" textAnchor="end" fill="var(--bad)" fontWeight="600">DANGER ZONE</text>
+
+      {/* Grid lines */}
+      {yTicks.map(t => (
+        <g key={t.v}>
+          <line x1={padL} x2={w - padR} y1={sy(t.v)} y2={sy(t.v)} stroke="var(--hairline)" strokeDasharray="3 3" />
+          <text x={padL - 6} y={sy(t.v) + 4} fontSize="10" fill="var(--ink-3)" textAnchor="end">{t.label}</text>
+        </g>
       ))}
-      {data.map((d, i) => {
-        const r = 8 + (d.r / maxR) * 28;
+
+      {/* X axis ticks */}
+      {[0, 0.25, 0.5, 0.75, 1].map(t => {
+        const val = maxX * t / 1.15;
         return (
-          <g key={i}>
-            <circle cx={sx(d.x)} cy={sy(d.y)} r={r} fill={colorFor(d.risk)} opacity="0.55" stroke={colorFor(d.risk)} strokeWidth="1.2" />
-            <text x={sx(d.x)} y={sy(d.y) - r - 4} fontSize="10.5" fill="var(--ink-2)" textAnchor="middle">{d.name}</text>
+          <g key={t}>
+            <line x1={sx(val)} x2={sx(val)} y1={padT + innerH} y2={padT + innerH + 4} stroke="var(--hairline)" />
+            <text x={sx(val)} y={padT + innerH + 16} fontSize="10" fill="var(--ink-3)" textAnchor="middle">€{val.toFixed(0)}M</text>
           </g>
         );
       })}
-      <text x={padL} y={h - 6} fontSize="10" fill="var(--ink-3)">Low share →</text>
-      <text x={w - padR} y={h - 6} fontSize="10" fill="var(--ink-3)" textAnchor="end">→ High share</text>
+
+      {/* Axis labels */}
+      <text x={padL + innerW / 2} y={h - 4} fontSize="10.5" fill="var(--ink-3)" textAnchor="middle">{xLabel}</text>
+
+      {/* Bubbles */}
+      {data.map((d, i) => {
+        const r = 10 + (d.r / maxR) * 26;
+        const cx = sx(d.x), cy = sy(d.y);
+        return (
+          <g key={i}>
+            <circle cx={cx} cy={cy} r={r} fill={colorFor(d.risk)} opacity="0.6" stroke={colorFor(d.risk)} strokeWidth="1.5" />
+            <text x={cx} y={cy - r - 5} fontSize="10.5" fill="var(--ink-2)" textAnchor="middle" style={{ pointerEvents: "none" }}>
+              {d.name.length > 14 ? d.name.split(" ")[0] : d.name}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
