@@ -113,11 +113,11 @@ function Dashboard({ openDrawer, api }) {
           }
         </div>
         <div className="card">
-          <div className="card-h"><h3>Spend vs Budget (€M)</h3></div>
-          <SpendVsBudget
-            data={(categories || []).slice(0, 10).map(c => ({ name: c.name, spend: c.spend, budget: c.budget }))}
-            absMax={Math.max(...Object.values(trendData).map(y => Math.max(...Object.values(y))))}
-          />
+          <div className="card-h">
+            <h3>YoY Spend Change by Category</h3>
+            <span className="sub">{year ? `${year - 1} → ${year}` : `${(trendYears || []).slice(-2)[0]} → ${(trendYears || []).slice(-1)[0]}`}</span>
+          </div>
+          <YoYBarChart categories={categories} trendYears={trendYears} trendData={trendData} selectedYear={year} />
         </div>
       </div>
 
@@ -171,6 +171,66 @@ function KpiCard({ label, value, sub, accent }) {
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{value}</div>
       <div className="kpi-foot"><span>{sub}</span></div>
+    </div>
+  );
+}
+
+function YoYBarChart({ categories, trendYears, trendData, selectedYear }) {
+  const years = trendYears || [];
+  const curYear  = selectedYear || years[years.length - 1];
+  const prevYear = years[years.indexOf(curYear) - 1] || years[years.length - 2];
+
+  const rows = (categories || []).map(c => {
+    const cur  = (trendData[c.name] || {})[curYear]  || c.spend || 0;
+    const prev = (trendData[c.name] || {})[prevYear] || 0;
+    const delta = prev ? cur - prev : 0;
+    const pct   = prev ? (delta / prev * 100) : 0;
+    return { ...c, cur, prev, delta, pct };
+  }).sort((a, b) => b.pct - a.pct);
+
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.pct)), 1);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {rows.map(r => {
+        const positive = r.pct >= 0;
+        const barW = (Math.abs(r.pct) / maxAbs) * 45; // max 45% of container each side
+        const riskColor = { critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[r.risk] || "var(--info)";
+        return (
+          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "130px 1fr 70px", gap: 10, alignItems: "center", fontSize: 12 }}>
+            <div style={{ color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: riskColor, flexShrink: 0 }} />
+              {r.name}
+            </div>
+            {/* Diverging bar — centre is 0 */}
+            <div style={{ position: "relative", height: 20, display: "flex", alignItems: "center" }}>
+              <div style={{ position: "absolute", left: "50%", top: "20%", bottom: "20%", width: 1, background: "var(--border-2)" }} />
+              <div style={{
+                position: "absolute",
+                left:  positive ? "50%" : `${50 - barW}%`,
+                width: `${barW}%`,
+                top: 2, bottom: 2,
+                background: positive ? "var(--good)" : "var(--bad)",
+                borderRadius: positive ? "0 3px 3px 0" : "3px 0 0 3px",
+                opacity: 0.8,
+              }} />
+            </div>
+            <div style={{ textAlign: "right", fontWeight: 600, fontFamily: "Geist Mono", fontSize: 11,
+              color: positive ? "var(--good)" : "var(--bad)" }}>
+              {positive ? "+" : ""}{r.pct.toFixed(1)}%
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 70px", gap: 10, marginTop: 4 }}>
+        <div />
+        <div style={{ position: "relative", fontSize: 10, color: "var(--ink-4)", display: "flex", justifyContent: "space-between", paddingTop: 4 }}>
+          <span>Decline</span>
+          <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)" }}>0%</span>
+          <span>Growth</span>
+        </div>
+        <div />
+      </div>
     </div>
   );
 }
