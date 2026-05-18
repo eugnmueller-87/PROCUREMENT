@@ -368,6 +368,71 @@ def suppliers():
     }
 
 
+@app.get("/api/suppliers/lookup/{name}")
+def supplier_lookup(name: str):
+    """
+    Fuzzy lookup a single supplier by name.
+    Returns spend profile from vendors table + any Hades DD fields stored on it.
+    Used by Icarus to answer 'is X a supplier?' and 'do we have DD on X?'.
+    """
+    from difflib import get_close_matches
+
+    conn = _conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM vendors ORDER BY total_spend DESC"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return {"found": False, "message": f"No supplier data in SpendLens yet."}
+
+    name_lower = name.lower().strip()
+    rows_dicts = [dict(r) for r in rows]
+    vendor_names = [r["vendor_name"] for r in rows_dicts]
+    vendor_names_lower = [v.lower() for v in vendor_names]
+
+    # Exact match first (case-insensitive)
+    try:
+        idx = vendor_names_lower.index(name_lower)
+        matched_row = rows_dicts[idx]
+    except ValueError:
+        # Fuzzy fallback — threshold 0.6
+        close = get_close_matches(name_lower, vendor_names_lower, n=1, cutoff=0.6)
+        if not close:
+            return {"found": False, "message": f"'{name}' not found in SpendLens spend data."}
+        idx = vendor_names_lower.index(close[0])
+        matched_row = rows_dicts[idx]
+
+    if not matched_row:
+    if not matched_row:
+        return {"found": False, "message": f"'{name}' not found in SpendLens spend data."}
+
+    return {
+        "found": True,
+        "vendor_name": matched_row["vendor_name"],
+        "category": matched_row.get("category"),
+        "country": matched_row.get("oc_country"),
+        "first_seen": str(matched_row.get("first_seen") or "")[:10],
+        "last_seen": str(matched_row.get("last_seen") or "")[:10],
+        "transaction_count": matched_row.get("transaction_count", 0),
+        "total_spend_eur": matched_row.get("total_spend", 0),
+        "risk_level": matched_row.get("risk_level"),
+        "single_source": bool(matched_row.get("single_source")),
+        # Hades DD fields (populated when Hades has investigated this vendor)
+        "hades": {
+            "risk_score": matched_row.get("hades_risk_score"),
+            "risk_level": matched_row.get("hades_risk_level"),
+            "recommendation": matched_row.get("hades_recommendation"),
+            "sanctions_clear": matched_row.get("hades_sanctions_clear"),
+            "lksg_signal": matched_row.get("hades_lksg_signal"),
+            "report_date": str(matched_row.get("hades_report_date") or "")[:10],
+            "next_steps": matched_row.get("hades_next_steps"),
+        },
+    }
+
+
 # ── Contracts / CLM ────────────────────────────────────────────────────────────
 
 @app.get("/api/contracts")
