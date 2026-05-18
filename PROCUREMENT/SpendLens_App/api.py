@@ -101,7 +101,10 @@ async def hades_investigate(payload: dict = Body(...)):
     url = _require_hades()
     try:
         r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=15)
+        r.raise_for_status()
         return r.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(e.response.status_code, e.response.text[:200])
     except Exception as e:
         raise HTTPException(502, str(e))
 
@@ -110,7 +113,10 @@ async def hades_result(task_id: str):
     url = _require_hades()
     try:
         r = await _hades_client.get(f"{url}/result/{task_id}", timeout=10)
+        r.raise_for_status()
         return r.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(e.response.status_code, e.response.text[:200])
     except Exception as e:
         raise HTTPException(502, str(e))
 
@@ -119,13 +125,14 @@ async def hades_result(task_id: str):
 
 @app.get("/api/health")
 def health():
+    conn = _conn()
     try:
-        conn = _conn()
         count = conn.execute("SELECT COUNT(*) FROM transactions_raw").fetchone()[0]
-        conn.close()
         return {"status": "ok", "transactions": count, "client": CLIENT}
     except Exception as e:
         raise HTTPException(500, str(e))
+    finally:
+        conn.close()
 
 
 # ── Dashboard KPIs ─────────────────────────────────────────────────────────────
@@ -678,21 +685,21 @@ def signals(category: Optional[str] = None, days: int = 30, limit: int = 50):
         conn = sqlite3.connect(str(icarus_db))
         conn.row_factory = sqlite3.Row
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-
-        if category and category != "all":
-            rows = conn.execute("""
-                SELECT * FROM signals
-                WHERE timestamp >= ? AND category LIKE ?
-                ORDER BY timestamp DESC LIMIT ?
-            """, (cutoff, f"%{category}%", limit)).fetchall()
-        else:
-            rows = conn.execute("""
-                SELECT * FROM signals
-                WHERE timestamp >= ?
-                ORDER BY timestamp DESC LIMIT ?
-            """, (cutoff, limit)).fetchall()
-
-        conn.close()
+        try:
+            if category and category != "all":
+                rows = conn.execute("""
+                    SELECT * FROM signals
+                    WHERE timestamp >= ? AND category LIKE ?
+                    ORDER BY timestamp DESC LIMIT ?
+                """, (cutoff, f"%{category}%", limit)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT * FROM signals
+                    WHERE timestamp >= ?
+                    ORDER BY timestamp DESC LIMIT ?
+                """, (cutoff, limit)).fetchall()
+        finally:
+            conn.close()
         result = [dict(r) for r in rows]
         if not result:
             demo = _demo_signals()
