@@ -45,7 +45,7 @@ SpendLens was migrated from a Panel/Bokeh dashboard to a production-grade React 
 | `screens/compliance.jsx` | Supplier scorecard with tier avatars, multi-filter, sort, click-to-drawer |
 | `screens/icarus.jsx` | Market signal feed, category tabs, RSS scan trigger |
 | `screens/strategy.jsx` | Kraljic, PESTEL, SWOT, negotiation frameworks — **placeholder, not wired to API** |
-| `screens/supplier.jsx` | Hades due diligence — polls `https://hades-production-b86a.up.railway.app` directly |
+| `screens/supplier.jsx` | Hades due diligence — proxied via `/api/hades/*` (URL set in Railway env var `HADES_URL`) |
 | `screens/clm.jsx` | Contract scan/save, drag-drop, RiskArc gauge, clause cards, history table |
 
 ---
