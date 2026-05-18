@@ -7,6 +7,8 @@
 
 > *Procurement has been running on static reports and manual analysis for decades. SpendLens changes that.*
 
+> **Procurement AI stack:** Icarus (personal AI OS) · **SpendLens** (spend analytics) · Hades (supplier vetting) · Hermes (market intelligence)
+
 ---
 
 ## What is SpendLens?
@@ -146,6 +148,84 @@ Raw Upload (CSV / Excel)
 
 ---
 
+## Stack Architecture
+
+SpendLens is the data platform at the centre of a four-agent system. It provides the spend record and vendor knowledge base; three AI agents interact with it to add intelligence.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            ICARUS (Personal AI OS)                          │
+│                    Telegram · Claude Sonnet 4.6 · icarusai.de               │
+│                                                                             │
+│  "Is Bechtle a supplier?"                                                   │
+│         │                                                                   │
+│         ▼  (parallel)                                                       │
+│  hades_supplier_lookup                                                      │
+│    ├── GET /api/suppliers/lookup/Bechtle  ──→  SpendLens (this system)      │
+│    └── GET /audit/Bechtle/latest          ──→  Hades                        │
+│         │                                                                   │
+│         ▼  (merged answer to user)                                          │
+│  SpendLens: ✅ Active (€2.1M · IT Software · 47 txns)                       │
+│  Hades DD:  ✅ Investigated 2026-05-14 · Low · Approve                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │                             │
+         ▼                             ▼
+┌─────────────────┐         ┌──────────────────────────────┐
+│   SPENDLENS     │         │         HADES (DD Agent)     │
+│  (this system)  │         │                              │
+│                 │◄────────│  POST /investigate           │
+│  vendor DB      │  writes │  (new vendor onboarding)     │
+│  spend records  │  back   │                              │
+│  approval flow  │         │  Reads Hermes Redis          │
+│  Hades UI       │         │  Writes audit to Redis       │
+│  Icarus signals │         │  Registers to Hermes watchlist│
+└─────────────────┘         └──────────────────────────────┘
+         │                                    │
+         │                                    │ shared
+         └──────────────────────────────────► │ Upstash Redis
+                                              ▼
+                                  ┌──────────────────────┐
+                                  │   HERMES (Intel)     │
+                                  │  ~590 suppliers      │
+                                  │  Redis + Vector      │
+                                  │  RSS · EDGAR · Jobs  │
+                                  └──────────────────────┘
+```
+
+### How SpendLens fits in
+
+| Interaction | Direction | What |
+|---|---|---|
+| Hades → SpendLens | Hades writes back | After DD: `hades_risk_score`, `hades_recommendation`, `hades_lksg_signal` saved to vendor record |
+| SpendLens → Hades | SpendLens calls | `POST /investigate` when new vendor created or periodic recheck triggered |
+| Icarus → SpendLens | Icarus reads | `GET /api/suppliers/lookup/{name}` for dual-check supplier status queries |
+| SpendLens → Hermes | SpendLens reads | Hermes market signals injected into the Icarus signals feed on scan |
+
+### Supplier lookup endpoint (for Icarus)
+
+```
+GET /api/suppliers/lookup/{name}
+
+Response:
+{
+  "found": true,
+  "vendor_name": "Bechtle AG",
+  "category": "IT Software & SaaS",
+  "total_spend_eur": 2100000,
+  "transaction_count": 47,
+  "last_seen": "2026-04",
+  "country": "DE",
+  "single_source": false,
+  "hades_risk_score": 3.2,
+  "hades_risk_level": "Low",
+  "hades_recommendation": "Approve"
+}
+```
+
+Fuzzy name matching at 0.6 threshold — so "Bechtle", "Bechtle AG", and "bechtle" all resolve to the same vendor record.
+
+---
+
 ## Architecture
 
 ```
@@ -193,6 +273,7 @@ lex.py                          — contract clause extraction + risk scoring
 | GET | `/api/health` | Healthcheck — returns transaction count |
 | GET | `/api/dashboard?year=` | KPIs, trend, categories, expiring contracts. Demo data if DB empty |
 | GET | `/api/suppliers` | Supplier profiles with scores, tiers, risk |
+| GET | `/api/suppliers/lookup/{name}` | Fuzzy supplier lookup for Icarus dual-check (spend + Hades status) |
 | GET | `/api/contracts` | All scanned contracts |
 | POST | `/api/contracts/scan` | Scan PDF/DOCX — calls `lex.py` |
 | POST | `/api/contracts/save` | Scan + persist to SQLite |
@@ -370,6 +451,19 @@ uvicorn api:app --reload --port 8000
 - **Uploaded documents** (contracts, pricing sheets) are processed in memory only. Nothing is written to disk beyond the structured extraction result. Refreshing clears session state.
 - **Spend data** is stored in a per-client SQLite database. No raw data is sent to external services except vendor names for AI classification.
 - **API key** is read from `.env` at startup and never logged or exposed in the UI.
+
+---
+
+## Part of the Procurement AI Stack
+
+SpendLens is the data platform at the centre of a four-agent system:
+
+| Agent | Role | Interaction with SpendLens |
+|---|---|---|
+| **Icarus** | Personal AI OS — user interface | Queries `/api/suppliers/lookup/{name}` for dual-check answers |
+| **SpendLens** | Spend analytics, vendor records, approval workflows | Hosts vendor DB; calls Hades at onboarding; exposes lookup API |
+| **Hades** | Supplier due diligence — autonomous research, risk scoring | Called by SpendLens; writes risk fields back to vendor record |
+| **Hermes** | Market intelligence — 590+ suppliers, continuous crawling | Signals injected into SpendLens Icarus feed; shares Redis with Hades |
 
 ---
 
