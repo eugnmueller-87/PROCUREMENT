@@ -18,8 +18,11 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import httpx
+from difflib import get_close_matches
+
 import pandas as pd
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,37 +67,50 @@ def _spend_col(df: pd.DataFrame) -> str:
 
 # ── Hades proxy ────────────────────────────────────────────────────────────────
 
-import httpx as _httpx
+_hades_client: httpx.AsyncClient | None = None
+
+@app.on_event("startup")
+async def _startup():
+    global _hades_client
+    _hades_client = httpx.AsyncClient(timeout=15)
+
+@app.on_event("shutdown")
+async def _shutdown():
+    if _hades_client:
+        await _hades_client.aclose()
+
+
+def _require_hades() -> str:
+    if not HADES_URL:
+        raise HTTPException(503, "Hades not configured")
+    return HADES_URL
+
 
 @app.get("/api/hades/health")
-def hades_health():
+async def hades_health():
     if not HADES_URL:
         return {"status": "unconfigured"}
     try:
-        r = _httpx.get(f"{HADES_URL}/health", timeout=5)
+        r = await _hades_client.get(f"{HADES_URL}/health", timeout=5)
         return r.json()
     except Exception:
         return {"status": "offline"}
 
 @app.post("/api/hades/investigate")
-async def hades_investigate(payload: dict):
-    if not HADES_URL:
-        raise HTTPException(503, "Hades not configured")
+async def hades_investigate(payload: dict = Body(...)):
+    url = _require_hades()
     try:
-        async with _httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(f"{HADES_URL}/investigate", json=payload)
-            return r.json()
+        r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=15)
+        return r.json()
     except Exception as e:
         raise HTTPException(502, str(e))
 
 @app.get("/api/hades/result/{task_id}")
 async def hades_result(task_id: str):
-    if not HADES_URL:
-        raise HTTPException(503, "Hades not configured")
+    url = _require_hades()
     try:
-        async with _httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(f"{HADES_URL}/result/{task_id}")
-            return r.json()
+        r = await _hades_client.get(f"{url}/result/{task_id}", timeout=10)
+        return r.json()
     except Exception as e:
         raise HTTPException(502, str(e))
 
@@ -370,44 +386,30 @@ def suppliers():
 
 @app.get("/api/suppliers/lookup/{name}")
 def supplier_lookup(name: str):
-    """
-    Fuzzy lookup a single supplier by name.
-    Returns spend profile from vendors table + any Hades DD fields stored on it.
-    Used by Icarus to answer 'is X a supplier?' and 'do we have DD on X?'.
-    """
-    from difflib import get_close_matches
-
+    # Used by Icarus to answer "is X a supplier?" and "do we have DD on X?"
     conn = _conn()
     try:
-        rows = conn.execute(
-            "SELECT * FROM vendors ORDER BY total_spend DESC"
-        ).fetchall()
+        name_lower = name.lower().strip()
+        # Exact match first
+        row = conn.execute(
+            "SELECT * FROM vendors WHERE lower(vendor_name) = ?", (name_lower,)
+        ).fetchone()
+        if row is None:
+            # Fuzzy fallback — load names only, then fetch winner by exact name
+            names = [r[0] for r in conn.execute("SELECT vendor_name FROM vendors").fetchall()]
+            names_lower = [n.lower() for n in names]
+            close = get_close_matches(name_lower, names_lower, n=1, cutoff=0.6)
+            if not close:
+                return {"found": False, "message": f"'{name}' not found in SpendLens spend data."}
+            matched_name = names[names_lower.index(close[0])]
+            row = conn.execute(
+                "SELECT * FROM vendors WHERE vendor_name = ?", (matched_name,)
+            ).fetchone()
+        if row is None:
+            return {"found": False, "message": f"'{name}' not found in SpendLens spend data."}
+        matched_row = dict(row)
     finally:
         conn.close()
-
-    if not rows:
-        return {"found": False, "message": f"No supplier data in SpendLens yet."}
-
-    name_lower = name.lower().strip()
-    rows_dicts = [dict(r) for r in rows]
-    vendor_names = [r["vendor_name"] for r in rows_dicts]
-    vendor_names_lower = [v.lower() for v in vendor_names]
-
-    # Exact match first (case-insensitive)
-    try:
-        idx = vendor_names_lower.index(name_lower)
-        matched_row = rows_dicts[idx]
-    except ValueError:
-        # Fuzzy fallback — threshold 0.6
-        close = get_close_matches(name_lower, vendor_names_lower, n=1, cutoff=0.6)
-        if not close:
-            return {"found": False, "message": f"'{name}' not found in SpendLens spend data."}
-        idx = vendor_names_lower.index(close[0])
-        matched_row = rows_dicts[idx]
-
-    if not matched_row:
-    if not matched_row:
-        return {"found": False, "message": f"'{name}' not found in SpendLens spend data."}
 
     return {
         "found": True,
