@@ -227,6 +227,82 @@ class HermesClient:
             ],
         }
 
+    # ------------------------------------------------------------------
+    # ZEUS intelligence — reads zeus:* keys written by the trading system
+    # ------------------------------------------------------------------
+
+    def get_zeus_macro(self) -> dict | None:
+        """Latest macro snapshot from ZEUS (regime, VIX, sector momentum)."""
+        try:
+            raw = self.r.get("zeus:macro:latest")
+            return json.loads(raw) if raw else None
+        except Exception:
+            return None
+
+    def get_zeus_decisions(self, limit: int = 20) -> list[dict]:
+        """Recent ZEUS trade decisions — for Icarus AI feed."""
+        try:
+            ids = self.r.lrange("zeus:decisions:recent", 0, limit - 1)
+            decisions = []
+            for tid in ids:
+                raw = self.r.get(f"zeus:decision:{tid}")
+                if raw:
+                    decisions.append(json.loads(raw))
+            return decisions
+        except Exception:
+            return []
+
+    def get_zeus_supplier_risk(self, vendor_name: str) -> dict | None:
+        """ZEUS/Hades compliance assessment for a specific supplier."""
+        slug = self._slug(vendor_name)
+        try:
+            raw = self.r.get(f"zeus:supplier_risk:{slug}")
+            return json.loads(raw) if raw else None
+        except Exception:
+            return None
+
+    def zeus_decisions_as_icarus_signals(self, limit: int = 20) -> list[dict]:
+        """
+        Convert ZEUS DecisionTraces into Icarus signal format so they appear
+        in the SpendLens Icarus AI screen alongside Hermes signals.
+        """
+        decisions = self.get_zeus_decisions(limit=limit)
+        signals = []
+        for d in decisions:
+            if not d.get("headline"):
+                continue
+            approved  = d.get("zeus_approved", False)
+            placed    = d.get("trade_placed", False)
+            pnl       = d.get("pnl_pct")
+            reasoning = d.get("zeus_reasoning", "")
+
+            if placed and pnl is not None:
+                impact = "positive" if pnl > 0 else "negative"
+            elif approved:
+                impact = "positive"
+            else:
+                impact = "neutral"
+
+            action = reasoning[:200] if reasoning else (
+                f"ZEUS {'TRADED' if placed else 'APPROVED' if approved else 'REJECTED'} — "
+                f"{d.get('kill_reason') or d.get('side','')}"
+            )
+            signals.append({
+                "source":    f"ZEUS · {d.get('supplier', 'Market')}",
+                "headline":  d.get("headline", "")[:200],
+                "summary":   f"Category: {d.get('category')} | Regime: {d.get('trend_regime')} | VIX: {d.get('trend_vix')} | Confidence: {d.get('pattern_confidence', 0):.0%}",
+                "category":  SIGNAL_TO_CATEGORY.get(
+                                 d.get("category", "OTHER").upper().replace("_","").replace(" ","_"), "Professional Services"
+                             ),
+                "relevance": 9 if placed else (7 if approved else 5),
+                "impact":    impact,
+                "action":    action,
+                "url":       "",
+                "published": d.get("timestamp", "")[:10],
+                "countries": [],
+            })
+        return signals
+
     def to_icarus_signals(self, hermes_items: list[dict]) -> list[dict]:
         """
         Convert Hermes items to Icarus signal format so they can be

@@ -723,6 +723,55 @@ def run_icarus_scan():
         raise HTTPException(500, str(e))
 
 
+# ── ZEUS intelligence endpoints ───────────────────────────────────────────────
+
+def _get_hermes_client():
+    try:
+        from modules.hermes_client import HermesClient
+        return HermesClient()
+    except Exception:
+        return None
+
+
+@app.get("/api/zeus/macro")
+def zeus_macro():
+    """Latest ZEUS macro snapshot — market regime, VIX, sector momentum."""
+    client = _get_hermes_client()
+    if client is None:
+        raise HTTPException(503, "HermesClient unavailable")
+    data = client.get_zeus_macro()
+    if data is None:
+        return {"available": False, "message": "ZEUS has not written a macro snapshot yet."}
+    return {"available": True, "macro": data}
+
+
+@app.get("/api/zeus/decisions")
+def zeus_decisions(limit: int = 20):
+    """Recent ZEUS trade decisions — for Icarus AI screen display."""
+    client = _get_hermes_client()
+    if client is None:
+        raise HTTPException(503, "HermesClient unavailable")
+    decisions = client.get_zeus_decisions(limit=limit)
+    signals = client.zeus_decisions_as_icarus_signals(limit=limit)
+    return {
+        "count": len(decisions),
+        "decisions": decisions,
+        "icarus_signals": signals,
+    }
+
+
+@app.get("/api/suppliers/{vendor_name}/zeus-risk")
+def zeus_supplier_risk(vendor_name: str):
+    """ZEUS/Hades compliance assessment for a specific supplier."""
+    client = _get_hermes_client()
+    if client is None:
+        raise HTTPException(503, "HermesClient unavailable")
+    risk = client.get_zeus_supplier_risk(vendor_name)
+    if risk is None:
+        return {"tracked_by_zeus": False, "vendor": vendor_name}
+    return {"tracked_by_zeus": True, "vendor": vendor_name, "risk": risk}
+
+
 # ── Static frontend ────────────────────────────────────────────────────────────
 # Mount after all API routes so /api/* is never captured by static files
 
