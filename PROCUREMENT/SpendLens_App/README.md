@@ -1,9 +1,12 @@
 <img src="docs/logo.svg" width="48" align="left" style="margin-right:12px;">
+# SpendLens
+
 ![Live](https://img.shields.io/badge/Live-Railway-brightgreen)
 ![Stack](https://img.shields.io/badge/Stack-React_+_FastAPI_+_SQLite-blue)
 ![AI](https://img.shields.io/badge/AI-Claude_API-orange)
 ![Data](https://img.shields.io/badge/Spend_Analytics-590%2B_Suppliers-purple)
 ![License](https://img.shields.io/badge/License-Private-lightgrey)
+
 
 # SpendLens
 ### AI-Powered Procurement Intelligence
