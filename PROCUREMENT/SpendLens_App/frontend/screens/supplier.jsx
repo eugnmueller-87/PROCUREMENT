@@ -28,7 +28,7 @@ function SupplierDD({ openDrawer, api }) {
   const [hadesStatus, setHadesStatus] = useS("unknown"); // "online" | "offline" | "unknown"
 
   useE(() => {
-    fetch(`${HADES_URL}/health`, { signal: AbortSignal.timeout(4000) })
+    fetch(`${HADES_URL}/health`, { signal: AbortSignal.timeout(8000) })
       .then(r => setHadesStatus(r.ok ? "online" : "offline"))
       .catch(() => setHadesStatus("offline"));
   }, []);
@@ -47,24 +47,20 @@ function SupplierDD({ openDrawer, api }) {
     setReport(null);
     setSteps({});
 
-    if (hadesStatus === "offline") {
-      setError("Hades service is currently offline. The due diligence agent runs on Railway — check the deployment status or try again shortly.");
-      setRunning(false);
-      return;
-    }
     try {
       const res = await fetch(`${HADES_URL}/investigate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ vendor_name: vendor, category, country, mode }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(35000),
       });
       if (!res.ok) throw new Error(`Hades returned ${res.status}`);
       const { task_id } = await res.json();
+      setHadesStatus("online");
       poll(task_id);
     } catch (e) {
       setHadesStatus("offline");
-      setError("Could not reach Hades. The service may be starting up — Railway cold-starts take ~30 seconds. Try again in a moment.");
+      setError("Could not reach Hades. The service may be cold-starting on Railway (~30s) — try again in a moment.");
       setRunning(false);
     }
   };

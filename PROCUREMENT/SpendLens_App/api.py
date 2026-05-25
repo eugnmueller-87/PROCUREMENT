@@ -100,7 +100,7 @@ async def hades_health():
 async def hades_investigate(payload: dict = Body(...)):
     url = _require_hades()
     try:
-        r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=15)
+        r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=30)
         r.raise_for_status()
         return r.json()
     except httpx.HTTPStatusError as e:
