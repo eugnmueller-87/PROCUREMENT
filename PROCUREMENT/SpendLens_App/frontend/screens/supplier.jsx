@@ -3,18 +3,6 @@ const { useState: useS, useEffect: useE } = React;
 
 const HADES_URL = "/api/hades";
 
-const HADES_STEPS = [
-  { id: "preflight",    label: "Pre-flight check" },
-  { id: "web",          label: "Web research & background" },
-  { id: "news",         label: "News sentiment (90 days)" },
-  { id: "sanctions",    label: "Sanctions & watchlists (OFAC / UN SC)" },
-  { id: "registry",     label: "Company registry lookup" },
-  { id: "lksg",         label: "LkSG / CSDDD compliance signals" },
-  { id: "esg",          label: "ESG & labour signals" },
-  { id: "synthesis",    label: "Risk synthesis" },
-  { id: "report",       label: "Report generation" },
-  { id: "watchlist",    label: "Watchlist registration" },
-];
 
 function SupplierDD({ openDrawer, api }) {
   const [vendor, setVendor] = useS("");
@@ -22,7 +10,6 @@ function SupplierDD({ openDrawer, api }) {
   const [country, setCountry] = useS("DE");
   const [mode, setMode] = useS("compliance");
   const [running, setRunning] = useS(false);
-  const [steps, setSteps] = useS({});
   const [report, setReport] = useS(null);
   const [error, setError] = useS("");
   const [hadesStatus, setHadesStatus] = useS("unknown"); // "online" | "offline" | "unknown"
@@ -45,19 +32,20 @@ function SupplierDD({ openDrawer, api }) {
     setRunning(true);
     setError("");
     setReport(null);
-    setSteps({});
 
     try {
       const res = await fetch(`${HADES_URL}/investigate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vendor_name: vendor, category, country, mode }),
-        signal: AbortSignal.timeout(35000),
+        body: JSON.stringify({ company: vendor, category, country, mode }),
+        signal: AbortSignal.timeout(120000),
       });
       if (!res.ok) throw new Error(`Hades returned ${res.status}`);
-      const { task_id } = await res.json();
+      const data = await res.json();
       setHadesStatus("online");
-      poll(task_id);
+      setRunning(false);
+      if (data.report) setReport(_normaliseReport(data.report));
+      else setError("Investigation returned no report");
     } catch (e) {
       setHadesStatus("offline");
       setError("Could not reach Hades. The service may be cold-starting on Railway (~30s) — try again in a moment.");
@@ -65,34 +53,16 @@ function SupplierDD({ openDrawer, api }) {
     }
   };
 
-  const poll = async (taskId) => {
-    const interval = setInterval(async () => {
-      try {
-        const r = await fetch(`${HADES_URL}/result/${taskId}`);
-        const d = await r.json();
-        if (d.steps) setSteps(d.steps);
-        if (d.status === "done" || d.status === "error") {
-          clearInterval(interval);
-          setRunning(false);
-          if (d.report) setReport(d.report);
-          if (d.status === "error") setError(d.error || "Investigation failed");
-        }
-      } catch (e) {
-        clearInterval(interval);
-        setRunning(false);
-        setError("Lost connection to Hades");
-      }
-    }, 2000);
-  };
-
-  const stepState = (id) => {
-    const s = steps[id];
-    if (!s) return "pending";
-    if (s.status === "done") return "done";
-    if (s.status === "running") return "running";
-    if (s.status === "error") return "error";
-    return "pending";
-  };
+  const _normaliseReport = (r) => ({
+    risk_score:      r.overall_risk_score,
+    risk_level:      r.risk_level,
+    recommendation:  r.recommendation,
+    executive_summary: r.executive_summary,
+    sanctions_clear: r.sanctions_status?.is_sanctioned === false,
+    lksg_signal:     r.lksg_csddd_assessment?.conclusion || r.lksg_csddd_assessment?.compliance_signal,
+    next_steps:      r.required_next_steps || [],
+    _raw:            r,
+  });
 
   const statusBadge = () => {
     if (hadesStatus === "online")  return <span className="chip good" style={{ fontSize: 11 }}><span className="dot" />Hades online</span>;
@@ -153,28 +123,13 @@ function SupplierDD({ openDrawer, api }) {
         {error && <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bad-soft)", borderRadius: "var(--r-sm)", color: "var(--bad)", fontSize: 13 }}>{error}</div>}
       </div>
 
-      {/* Pipeline progress */}
-      {(running || Object.keys(steps).length > 0) && (
-        <div className="card">
-          <div className="card-h"><h3>Investigation Pipeline</h3></div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {HADES_STEPS.map(step => {
-              const state = stepState(step.id);
-              return (
-                <div key={step.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--hairline)" }}>
-                  <div style={{ width: 20, display: "grid", placeItems: "center" }}>
-                    {state === "done"    && <Icons.Check size={16} color="var(--good)" />}
-                    {state === "running" && <div className="spin" style={{ width: 16, height: 16 }} />}
-                    {state === "error"   && <Icons.X size={16} color="var(--bad)" />}
-                    {state === "pending" && <div style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid var(--border-2)" }} />}
-                  </div>
-                  <div style={{ flex: 1, fontSize: 13, color: state === "pending" ? "var(--ink-4)" : "var(--ink)" }}>{step.label}</div>
-                  {steps[step.id]?.summary && (
-                    <div style={{ fontSize: 11, color: "var(--ink-3)", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{steps[step.id].summary}</div>
-                  )}
-                </div>
-              );
-            })}
+      {/* Running indicator */}
+      {running && (
+        <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 20 }}>
+          <div className="spin" style={{ width: 20, height: 20, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>Running investigation…</div>
+            <div className="txt-sm txt-muted" style={{ marginTop: 2 }}>Sanctions · Registry · News · LkSG · ESG · Hermes — takes ~60s</div>
           </div>
         </div>
       )}
@@ -200,15 +155,17 @@ function SupplierDD({ openDrawer, api }) {
             </div>
           </div>
 
-          {report.recommendation && (
+          {(report.recommendation || report.executive_summary) && (
             <div className="ai-card">
               <div className="ai-h">
                 <div className="ai-mark"><Icons.Spark size={14} /></div>
-                <div><div className="ai-title">Recommendation</div></div>
+                <div><div className="ai-title">Recommendation: {report.recommendation}</div></div>
               </div>
-              <div className="ai-insights">
-                <div className="ai-insight"><div className="marker" /><div>{report.recommendation}</div></div>
-              </div>
+              {report.executive_summary && (
+                <div className="ai-insights">
+                  <div className="ai-insight"><div className="marker" /><div>{report.executive_summary}</div></div>
+                </div>
+              )}
             </div>
           )}
 
