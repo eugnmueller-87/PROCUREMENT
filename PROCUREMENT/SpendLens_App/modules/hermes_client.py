@@ -94,12 +94,10 @@ class HermesClient:
 
     def _fetch_items(self, slug: str, limit: int) -> list[dict]:
         ids = self.r.lrange(f"hermes:supplier:{slug}", 0, limit - 1)
-        items = []
-        for item_id in ids:
-            raw = self.r.get(f"hermes:item:{item_id}")
-            if raw:
-                items.append(json.loads(raw))
-        return items
+        if not ids:
+            return []
+        raws = self.r.mget(*[f"hermes:item:{item_id}" for item_id in ids])
+        return [json.loads(r) for r in raws if r]
 
     def get_signals(self, vendor_name: str, limit: int = 10, procurement_only: bool = True) -> list[dict]:
         slug = self._resolve(vendor_name)
@@ -243,12 +241,10 @@ class HermesClient:
         """Recent ZEUS trade decisions — for Icarus AI feed."""
         try:
             ids = self.r.lrange("zeus:decisions:recent", 0, limit - 1)
-            decisions = []
-            for tid in ids:
-                raw = self.r.get(f"zeus:decision:{tid}")
-                if raw:
-                    decisions.append(json.loads(raw))
-            return decisions
+            if not ids:
+                return []
+            raws = self.r.mget(*[f"zeus:decision:{tid}" for tid in ids])
+            return [json.loads(r) for r in raws if r]
         except Exception:
             return []
 

@@ -3,6 +3,16 @@ const { useState: useS, useEffect: useE } = React;
 
 const HADES_URL = "/api/hades";
 
+const normaliseReport = (r) => ({
+  risk_score:        r.overall_risk_score,
+  risk_level:        r.risk_level,
+  recommendation:    r.recommendation,
+  executive_summary: r.executive_summary,
+  sanctions_clear:   r.sanctions_status?.is_sanctioned === false,
+  lksg_signal:       r.lksg_csddd_assessment?.conclusion || r.lksg_csddd_assessment?.compliance_signal,
+  next_steps:        r.required_next_steps || [],
+  _raw:              r,
+});
 
 function SupplierDD({ openDrawer, api }) {
   const [vendor, setVendor] = useS("");
@@ -44,7 +54,7 @@ function SupplierDD({ openDrawer, api }) {
       const data = await res.json();
       setHadesStatus("online");
       setRunning(false);
-      if (data.report) setReport(_normaliseReport(data.report));
+      if (data.report) setReport(normaliseReport(data.report));
       else setError("Investigation returned no report");
     } catch (e) {
       setHadesStatus("offline");
@@ -52,17 +62,6 @@ function SupplierDD({ openDrawer, api }) {
       setRunning(false);
     }
   };
-
-  const _normaliseReport = (r) => ({
-    risk_score:      r.overall_risk_score,
-    risk_level:      r.risk_level,
-    recommendation:  r.recommendation,
-    executive_summary: r.executive_summary,
-    sanctions_clear: r.sanctions_status?.is_sanctioned === false,
-    lksg_signal:     r.lksg_csddd_assessment?.conclusion || r.lksg_csddd_assessment?.compliance_signal,
-    next_steps:      r.required_next_steps || [],
-    _raw:            r,
-  });
 
   const statusBadge = () => {
     if (hadesStatus === "online")  return <span className="chip good" style={{ fontSize: 11 }}><span className="dot" />Hades online</span>;

@@ -187,6 +187,7 @@ def dashboard(year: Optional[int] = None):
         fdf.groupby("category_mapped")["_spend"]
         .sum().sort_values(ascending=False).reset_index()
     )
+    supplier_counts = fdf.groupby("category_mapped")["supplier"].nunique()
     categories = [
         {
             "id": row["category_mapped"].lower().replace(" ", "_").replace("/", "_").replace("&", "and") if row["category_mapped"] else "other",
@@ -194,7 +195,7 @@ def dashboard(year: Optional[int] = None):
             "spend": round(float(row["_spend"]) / 1000, 1),
             "budget": round(float(row["_spend"]) * 0.92 / 1000, 1),
             "risk": "high",
-            "suppliers": int(fdf[fdf["category_mapped"] == row["category_mapped"]]["supplier"].nunique()),
+            "suppliers": int(supplier_counts.get(row["category_mapped"], 0)),
             "growth": 0,
         }
         for _, row in by_cat.iterrows() if row["category_mapped"]
@@ -725,20 +726,30 @@ def run_icarus_scan():
 
 # ── ZEUS intelligence endpoints ───────────────────────────────────────────────
 
+_hermes_client = None
+
 def _get_hermes_client():
+    global _hermes_client
+    if _hermes_client is not None:
+        return _hermes_client
     try:
         from modules.hermes_client import HermesClient
-        return HermesClient()
+        _hermes_client = HermesClient()
+        return _hermes_client
     except Exception:
         return None
+
+def _require_hermes_client():
+    client = _get_hermes_client()
+    if client is None:
+        raise HTTPException(503, "HermesClient unavailable")
+    return client
 
 
 @app.get("/api/zeus/macro")
 def zeus_macro():
     """Latest ZEUS macro snapshot — market regime, VIX, sector momentum."""
-    client = _get_hermes_client()
-    if client is None:
-        raise HTTPException(503, "HermesClient unavailable")
+    client = _require_hermes_client()
     data = client.get_zeus_macro()
     if data is None:
         return {"available": False, "message": "ZEUS has not written a macro snapshot yet."}
@@ -748,9 +759,7 @@ def zeus_macro():
 @app.get("/api/zeus/decisions")
 def zeus_decisions(limit: int = 20):
     """Recent ZEUS trade decisions — for Icarus AI screen display."""
-    client = _get_hermes_client()
-    if client is None:
-        raise HTTPException(503, "HermesClient unavailable")
+    client = _require_hermes_client()
     decisions = client.get_zeus_decisions(limit=limit)
     signals = client.zeus_decisions_as_icarus_signals(limit=limit)
     return {
@@ -763,9 +772,7 @@ def zeus_decisions(limit: int = 20):
 @app.get("/api/suppliers/{vendor_name}/zeus-risk")
 def zeus_supplier_risk(vendor_name: str):
     """ZEUS/Hades compliance assessment for a specific supplier."""
-    client = _get_hermes_client()
-    if client is None:
-        raise HTTPException(503, "HermesClient unavailable")
+    client = _require_hermes_client()
     risk = client.get_zeus_supplier_risk(vendor_name)
     if risk is None:
         return {"tracked_by_zeus": False, "vendor": vendor_name}

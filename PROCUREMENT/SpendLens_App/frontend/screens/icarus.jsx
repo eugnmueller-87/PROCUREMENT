@@ -23,7 +23,7 @@ function Icarus({ openDrawer, api }) {
     setLoading(false);
   };
 
-  useE(() => { load(cat, days); }, []);
+  useE(() => { load(cat, days); }, [cat, days]);
 
   const runScan = async () => {
     setScanning(true);
@@ -58,7 +58,7 @@ function Icarus({ openDrawer, api }) {
           <div className="sub">Market intelligence · RSS feeds · procurement signals</div>
         </div>
         <div className="flex gap-2 center-y">
-          <select className="select" value={days} onChange={e => { setDays(parseInt(e.target.value)); load(cat, parseInt(e.target.value)); }}>
+          <select className="select" value={days} onChange={e => setDays(parseInt(e.target.value))}>
             <option value={1}>Today</option>
             <option value={7}>7 days</option>
             <option value={30}>30 days</option>
@@ -75,7 +75,7 @@ function Icarus({ openDrawer, api }) {
       <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
         {CATS.map(c => (
           <button key={c} className={`btn sm${cat === c ? " primary" : ""}`}
-            onClick={() => { setCat(c); load(c, days); }}>
+            onClick={() => setCat(c)}>
             {c}
             {c !== "All" && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>
               {signals.filter(s => (s.category || "").toLowerCase().includes(c.toLowerCase().split(" ")[0])).length}
