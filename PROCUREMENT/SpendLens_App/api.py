@@ -72,7 +72,7 @@ _hades_client: httpx.AsyncClient | None = None
 @app.on_event("startup")
 async def _startup():
     global _hades_client
-    _hades_client = httpx.AsyncClient(timeout=15)
+    _hades_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5))
 
 @app.on_event("shutdown")
 async def _shutdown():
@@ -100,7 +100,7 @@ async def hades_health():
 async def hades_investigate(payload: dict = Body(...)):
     url = _require_hades()
     try:
-        r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=30)
+        r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=110)
         r.raise_for_status()
         return r.json()
     except httpx.HTTPStatusError as e:
