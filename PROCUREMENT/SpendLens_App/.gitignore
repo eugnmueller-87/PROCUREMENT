@@ -63,9 +63,17 @@ $RECYCLE.BIN/
 # ── Test datasets — local only, never commit ──────────────────────────────────
 test-datasets/
 
-# ── Session handover files ────────────────────────────────────────────────────
+# ── Internal docs — never commit ─────────────────────────────────────────────
 handover/
+HANDOVER.md
+TODO.md
 readmeGit.md
+docs/SPENDLENS_HANDOVER.md
+docs/FEATURE_IDEAS.md
+docs/MILESTONES.md
+docs/PROFILE_README.md
+docs/github-profile-README.md
+docs/TODO.md
 
 # ── Screenshots — local reference only, never commit ─────────────────────────
 screenshots2/
