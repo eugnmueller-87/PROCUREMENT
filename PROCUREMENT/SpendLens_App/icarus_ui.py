@@ -26,6 +26,48 @@ def _fetch_hermes_signals() -> list[dict]:
         print(f"[IcarusPanel] Hermes unavailable — falling back to RSS: {exc}")
         return []
 
+
+def _push_high_signals_to_telegram(signals: list[dict]) -> None:
+    """
+    Send HIGH-urgency procurement signals to the ICARUS Telegram bot.
+    Silently no-ops if TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID are not set.
+    """
+    import os
+    import requests as _req
+    token   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        return
+
+    high = [s for s in signals if s.get("relevance", 0) >= 9]
+    if not high:
+        return
+
+    lines = ["⚡ *SpendLens HIGH signals*\n"]
+    for s in high[:5]:
+        supplier = s.get("source", "").replace("Hermes · ", "")
+        headline = s.get("headline", "")[:100]
+        action   = s.get("action", "")[:120]
+        url      = s.get("url", "")
+        line = f"• *{supplier}*: {headline}"
+        if url:
+            line = f"• *{supplier}*: [{headline}]({url})"
+        lines.append(line)
+        if action:
+            lines.append(f"  → _{action}_")
+
+    text = "\n".join(lines)
+    try:
+        _req.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text,
+                  "parse_mode": "Markdown", "disable_web_page_preview": True},
+            timeout=8,
+        )
+        print(f"[IcarusPanel] pushed {len(high)} HIGH signals to Telegram")
+    except Exception as e:
+        print(f"[IcarusPanel] Telegram push failed: {e}")
+
 # ── Colors aligned to SpendLens taxonomy ─────────────────────────────────────
 CAT_COLORS = {
     "Cloud & Compute":          "#378ADD",
@@ -937,6 +979,10 @@ class IcarusPanel(param.Parameterized):
                 if signals:
                     query_id = icarus.save_query(self.client_categories, 0, len(signals))
                     icarus.save_signals(query_id, signals)
+                    threading.Thread(
+                        target=_push_high_signals_to_telegram,
+                        args=(signals,), daemon=True
+                    ).start()
                 else:
                     result = icarus.run(
                         client_categories=self.client_categories,
@@ -1190,7 +1236,7 @@ class IcarusPanel(param.Parameterized):
             f'{_CSS}<div style="font-size:11px;color:#888;padding:4px 0;">'
             f'Removed: {filename}'
             + (f' — {n} doc{"s" if n != 1 else ""} still loaded' if n else '') +
-            f'</div>'
+            '</div>'
         )
         self._doc_status.visible = True
         self._refresh_doc_list()

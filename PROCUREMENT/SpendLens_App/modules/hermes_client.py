@@ -112,17 +112,24 @@ class HermesClient:
         items = self.get_signals(vendor_name, limit=20, procurement_only=True)
         return [i for i in items if i.get("is_significant") and i.get("urgency") in ("HIGH", "MEDIUM")]
 
-    def get_procurement_briefing(self, limit: int = 20) -> list[dict]:
-        """Top significant procurement signals across all tracked suppliers."""
+    def get_procurement_briefing(self, limit: int = 20, all_significant: bool = True) -> list[dict]:
+        """
+        Top significant procurement signals across all tracked suppliers.
+        all_significant=True (default): include ALL signal types that Hermes marks as significant.
+        all_significant=False: restrict to core procurement types (SUPPLY_CHAIN, EARNINGS, etc.)
+        """
         keys = self.r.keys("hermes:item:*")
         items = []
-        for key in keys[:300]:
+        for key in keys[:500]:
             raw = self.r.get(key)
             if raw:
                 item = json.loads(raw)
-                if item.get("is_significant") and item.get("signal_type") in PROCUREMENT_SIGNALS:
-                    items.append(item)
-        items.sort(key=lambda x: x.get("published", ""), reverse=True)
+                if not item.get("is_significant"):
+                    continue
+                if not all_significant and item.get("signal_type") not in PROCUREMENT_SIGNALS:
+                    continue
+                items.append(item)
+        items.sort(key=lambda x: (x.get("urgency","LOW") == "HIGH", x.get("published", "")), reverse=True)
         return items[:limit]
 
     def enrich_vendor_list(self, vendor_names: list[str]) -> dict[str, dict]:

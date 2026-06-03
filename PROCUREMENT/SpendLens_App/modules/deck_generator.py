@@ -505,7 +505,7 @@ def _slide_tco(data: dict, category: str, date_str: str) -> str:
 </div>"""
 
     levers = data.get("reduction_levers", [])
-    levers_li = "".join(f"<li>{_e(l)}</li>" for l in levers)
+    levers_li = "".join(f"<li>{_e(lever)}</li>" for lever in levers)
 
     body = f"""
 {'<div class="tco-insight">' + _e(data.get("key_insight", "")) + '</div>' if data.get("key_insight") else ''}

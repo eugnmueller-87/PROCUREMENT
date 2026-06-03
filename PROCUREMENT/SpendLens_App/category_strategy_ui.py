@@ -13,7 +13,7 @@ functions; dynamic HTML panes updated server-side via Panel param.
 
 import io
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from html import escape
 
 import panel as pn
@@ -435,7 +435,7 @@ def _build_tco_html(data: dict, updated_at: str = None) -> str:
             f'</div>'
         )
     levers = data.get("reduction_levers", [])
-    lev_li = "".join(f"<li>{_e(l)}</li>" for l in levers)
+    lev_li = "".join(f"<li>{_e(lever)}</li>" for lever in levers)
     meta   = _fmt_ts(updated_at) if updated_at else ""
     return f"""{_CSS}
 <div class="cs">
@@ -653,10 +653,7 @@ class CategoryStrategyPanel(param.Parameterized):
             "levers":  lambda sd, sig: generate_levers(self._category, sd, sig, selected_countries),
         }
 
-        label = FRAMEWORK_LABELS.get(fw_key, fw_key)
-
         def _progress_single():
-            from modules.category_strategy import FRAMEWORK_LABELS as FL
             self._content_pane.object = _build_generating_html(
                 self._category, fw_key, 1, 1
             )

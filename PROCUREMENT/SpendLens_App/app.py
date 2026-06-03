@@ -12,14 +12,12 @@ import panel as pn
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 import io
 import math
 import os
 import sqlite3
 import threading
 from datetime import datetime
-from pathlib import Path
 from dotenv import load_dotenv
 
 # ── Load environment variables ──────────────────────────────────────────────
@@ -33,7 +31,6 @@ from modules.category_mapper import run_category_mapping
 from modules.flag_engine     import run_flag_engine
 from modules.database        import (init_database, get_connection, log_upload,
                                       insert_raw_transactions, insert_enriched_transactions,
-                                      bulk_upsert_vendors, get_full_transaction_view,
                                       get_vendor_detail_map)
 from modules.cfo_reports        import export_cfo_excel
 from modules.supplier_profiler import (
@@ -636,7 +633,7 @@ def _build_data_bullets(graph_id: str, start_yr: int | None = None, end_yr: int 
             return '<div style="color:#888;font-size:12px;padding:6px 0;font-family:-apple-system,sans-serif;">Upload spend data to see chart interpretation.</div>'
         # 1 — Single source risk (highest priority procurement risk)
         if "single_source" in dm.columns and "spend_2026e" in dm.columns:
-            ss = dm[dm["single_source"] == True].sort_values("spend_2026e", ascending=False)
+            ss = dm[dm["single_source"]].sort_values("spend_2026e", ascending=False)
             if not ss.empty:
                 top = ss.iloc[0]
                 out += _row("⚠", RED, "Single-source risk",
@@ -939,7 +936,7 @@ def chart_ebitda_waterfall(df_ebitda):
     x_labels = list(items["Initiative"]) + ["Total Impact"]
     y_values = list(items["Impact €K"]) + [total]
     measure = ["relative"] * len(items) + ["total"]
-    colors_wf = [GREEN if t == "Savings" else NAVY2 for t in items["Type"]] + [GREEN]
+    # colors_wf kept for future Waterfall trace — not currently used by go.Waterfall
 
     fig = go.Figure(go.Waterfall(
         x=x_labels, y=y_values, measure=measure,
@@ -1181,7 +1178,7 @@ def render_ebitda_table(df_ebitda):
 # ─────────────────────────────────────────────────────────────────────────────
 # LOGO SVG
 # ─────────────────────────────────────────────────────────────────────────────
-LOGO_SVG = f"""
+LOGO_SVG = """
 <svg width="44" height="44" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <polygon points="100,4 182,52 182,148 100,196 18,148 18,52"
            fill="none" stroke="white" stroke-width="8"/>
@@ -1252,8 +1249,8 @@ def run_pipeline(filename: str, file_bytes: bytes,
         # Step 5: Flag engine
         status_callback("🚩 Analysing compliance & risk flags...")
         flagged_df, coverage = run_flag_engine(enriched_df)
-        maverick_count = int((flagged_df.get("maverick_flag", pd.Series()) == True).sum())
-        shadow_count = int((flagged_df.get("shadow_it_flag", pd.Series()) == True).sum())
+        maverick_count = int(flagged_df.get("maverick_flag", pd.Series()).sum())
+        shadow_count = int(flagged_df.get("shadow_it_flag", pd.Series()).sum())
         status_callback(f"🚩 Flags — {maverick_count} maverick, {shadow_count} shadow IT")
 
         # Step 6: Database
@@ -1264,7 +1261,7 @@ def run_pipeline(filename: str, file_bytes: bytes,
         insert_raw_transactions(conn, df, upload_id)
         insert_enriched_transactions(conn, df, flagged_df)
         conn.close()
-        status_callback(f"💾 Saved to knowledge base")
+        status_callback("💾 Saved to knowledge base")
 
         # Step 7: Supplier profiles — ABC tiers + compliance scores
         status_callback("🏆 Computing supplier ABC tiers...")
@@ -1609,9 +1606,19 @@ function scEditCard(el,field){
 </script>"""
 
 
-def _build_vendor_detail_html(detail: dict) -> str:
-    """Render the three rich panels shown inside an expanded supplier card."""
-    if not detail:
+def _get_hermes_vendor_signals(vendor_name: str) -> list[dict]:
+    """Fetch top Hermes signals for a specific vendor. Silent on any error."""
+    try:
+        from modules.hermes_client import HermesClient
+        intel = HermesClient().get_vendor_intel(vendor_name, limit=4)
+        return intel.get("top_signals", [])
+    except Exception:
+        return []
+
+
+def _build_vendor_detail_html(detail: dict, vendor_name: str = "") -> str:
+    """Render the rich panels shown inside an expanded supplier card."""
+    if not detail and not vendor_name:
         return ""
 
     # ── Spend trend SVG ────────────────────────────────────────────────────────
@@ -1649,7 +1656,7 @@ def _build_vendor_detail_html(detail: dict) -> str:
     no_po   = pb.get("no_po", 0)
     unk     = pb.get("unknown", 0)
     total   = max(with_po + no_po + unk, 1)
-    pct_w   = lambda n: f"{n / total * 100:.1f}%"
+    def pct_w(n): return f"{n / total * 100:.1f}%"
     po_bar = (
         f'<div style="margin-bottom:14px;">'
         f'<div style="font-size:10px;text-transform:uppercase;color:#64748B;'
@@ -1726,9 +1733,49 @@ def _build_vendor_detail_html(detail: dict) -> str:
             'No transaction history available.</div>'
         )
 
+    # ── Hermes live intelligence ───────────────────────────────────────────────
+    hermes_html = ""
+    if vendor_name:
+        h_signals = _get_hermes_vendor_signals(vendor_name)
+        if h_signals:
+            urgency_color = {"HIGH": "#C0392B", "MEDIUM": "#B8860B", "LOW": "#1A7A4A"}
+            sig_rows = ""
+            for s in h_signals:
+                urg = s.get("urgency", "LOW")
+                col = urgency_color.get(urg, "#64748B")
+                title = s.get("title", "")[:120]
+                reason = s.get("significance_reason", "")[:140]
+                url    = s.get("url", "")
+                stype  = s.get("signal_type", "").replace("_", " ").title()
+                date   = s.get("published", "")[:10]
+                title_html = (
+                    f'<a href="{url}" target="_blank" style="color:#1B3A6B;text-decoration:none;">{title}</a>'
+                    if url else title
+                )
+                sig_rows += (
+                    f'<div style="padding:7px 0;border-bottom:1px solid #F1F5F9;">'
+                    f'<div style="display:flex;align-items:flex-start;gap:8px;">'
+                    f'<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;'
+                    f'background:{col}22;color:{col};white-space:nowrap;flex-shrink:0;">{urg}</span>'
+                    f'<div>'
+                    f'<div style="font-size:12px;font-weight:500;color:#1B2A4A;line-height:1.4;">{title_html}</div>'
+                    f'{"<div style=\"font-size:11px;color:#64748B;margin-top:2px;\">" + reason + "</div>" if reason else ""}'
+                    f'<div style="font-size:10px;color:#94A3B8;margin-top:2px;">{stype} · {date}</div>'
+                    f'</div></div></div>'
+                )
+            hermes_html = (
+                f'<div style="margin-bottom:14px;">'
+                f'<div style="font-size:10px;text-transform:uppercase;color:#64748B;'
+                f'letter-spacing:0.5px;margin-bottom:6px;">🔭 Hermes Live Intelligence</div>'
+                f'{sig_rows}</div>'
+            )
+
+    content = trend_html + po_bar + hermes_html + txn_html
+    if not content.strip():
+        return ""
     return (
         f'<div style="border-top:1px solid #F0F4FF;margin-top:8px;padding-top:14px;">'
-        f'{trend_html}{po_bar}{txn_html}</div>'
+        f'{content}</div>'
     )
 
 
@@ -1764,11 +1811,11 @@ def _build_sc_cards_html(df: pd.DataFrame, detail_map: dict | None = None) -> st
         # Score trend arrow
         diff = score - prev_score
         if diff > 0.5:
-            trend = f'<span style="color:#1A7A4A;font-size:12px;margin-left:2px;">↑</span>'
+            trend = '<span style="color:#1A7A4A;font-size:12px;margin-left:2px;">↑</span>'
         elif diff < -0.5:
-            trend = f'<span style="color:#C0392B;font-size:12px;margin-left:2px;">↓</span>'
+            trend = '<span style="color:#C0392B;font-size:12px;margin-left:2px;">↓</span>'
         else:
-            trend = f'<span style="color:#8BA0C4;font-size:12px;margin-left:2px;">–</span>'
+            trend = '<span style="color:#8BA0C4;font-size:12px;margin-left:2px;">–</span>'
 
         sc_color = GREEN if score >= 80 else NAVY2 if score >= 65 else YELLOW if score >= 50 else RED
 
@@ -1850,7 +1897,7 @@ def _build_sc_cards_html(df: pd.DataFrame, detail_map: dict | None = None) -> st
         <select class="sc-sel" onchange="scEditCard(this,'relationship_status')">{rel_opts}</select>
       </div>
     </div>
-    {_build_vendor_detail_html((detail_map or {}).get(vendor, {}))}
+    {_build_vendor_detail_html((detail_map or {}).get(vendor, {}), vendor_name=vendor)}
   </div>
 </div>"""
 

@@ -115,7 +115,6 @@ def _risk_legend_html() -> str:
     """Horizontal 1–10 scale with labelled zones — explains what scores mean."""
     segments = ""
     for lo, hi, color, label, desc in RISK_LEGEND:
-        width_pct = int((hi - lo + 1) * 10)
         segments += (
             f"<div style='flex:{hi - lo + 1};padding:0 4px'>"
             f"<div style='height:8px;background:{color};border-radius:3px'></div>"
@@ -135,7 +134,7 @@ def _risk_legend_html() -> str:
             f"<span style='color:{color};font-weight:700'>{lo}–{hi}:</span> {desc}</span>"
             for lo, hi, color, label, desc in RISK_LEGEND
         )
-        + f"</div></div>"
+        + "</div></div>"
     )
 
 
@@ -380,8 +379,9 @@ class HadesPanel(param.Parameterized):
             pn.state.execute(lambda: self._show_error(
                 "Investigation timed out (>180s). Hades may be under load — try again."
             ))
-        except Exception as e:
-            pn.state.execute(lambda: self._show_error(str(e)))
+        except Exception as exc:
+            _msg = str(exc)
+            pn.state.execute(lambda: self._show_error(_msg))
         finally:
             pn.state.execute(lambda: setattr(self._run_btn, "disabled", False))
 
@@ -413,7 +413,7 @@ class HadesPanel(param.Parameterized):
 
         rec_color = REC_COLOR.get(rec, ACCENT)
         rec_icon  = REC_ICON.get(rec, "")
-        lvl_color = RISK_COLOR.get(risk_lvl, DIM)
+        # lvl_color = RISK_COLOR.get(risk_lvl, DIM)  # reserved for future badge styling
         overall_color = _score_color(overall)
 
         # ── Header card ───────────────────────────────────────────────────────
@@ -477,7 +477,7 @@ class HadesPanel(param.Parameterized):
             f"<span style='width:220px'>Score</span>"
             f"</div>"
             + dim_rows +
-            f"</div>"
+            "</div>"
         )
 
         # ── Executive summary ─────────────────────────────────────────────────
@@ -616,12 +616,6 @@ class HadesPanel(param.Parameterized):
             sizing_mode="stretch_width",
         )
 
-        # ── Form card ─────────────────────────────────────────────────────────
-        form_card = pn.pane.HTML(
-            f"<div style='background:{CARD};border:1px solid {BORDER};border-radius:12px;"
-            f"padding:22px 26px;margin-bottom:20px'>",
-            width=0, height=0,
-        )
 
         content = pn.Row(
             pn.Column(self._pipeline_pane, width=440, margin=(0, 24, 0, 0)),

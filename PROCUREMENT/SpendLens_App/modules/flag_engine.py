@@ -39,10 +39,7 @@ Never punish a company for their ERP's export format.
 """
 
 import pandas as pd
-import numpy as np
-import re
-from datetime import datetime, date
-from typing import Optional
+from datetime import datetime
 
 
 # ── DEFAULT CONFIG ─────────────────────────────────────────────────────────────
@@ -130,7 +127,7 @@ def scan_available_fields(df: pd.DataFrame) -> dict:
     print(f"  📋 Fields found ({len(found_fields)}): {', '.join(found_fields)}")
     if missing_fields:
         print(f"  ⚠ Fields not found ({len(missing_fields)}): {', '.join(missing_fields)}")
-        print(f"     → Flags depending on these fields will be marked 'Unknown'")
+        print("     → Flags depending on these fields will be marked 'Unknown'")
 
     return available
 
@@ -296,7 +293,7 @@ def flag_maverick(df: pd.DataFrame, fields: dict,
         else:
             result[idx] = is_maverick
 
-    true_count = (result == True).sum()
+    true_count = result.sum()
     unknown_count = result.isna().sum()
     print(f"  ✅ Maverick: {true_count} flagged | {unknown_count} unknown (data gap)")
     return result
