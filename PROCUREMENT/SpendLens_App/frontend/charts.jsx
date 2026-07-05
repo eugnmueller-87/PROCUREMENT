@@ -5,7 +5,6 @@ const RISK_COLOR = { critical: "var(--bad)", high: "var(--warn)", medium: "var(-
 const RISK_CLASS = { critical: "bad", high: "warn", medium: "info", low: "good", Critical: "bad", High: "warn", Medium: "info", Low: "good" };
 const riskColor = (r) => RISK_COLOR[r] || "var(--ink-3)";
 const riskClass = (r) => RISK_CLASS[r] || "info";
-const riskChip  = (r) => `<span class="chip ${riskClass(r)}"><span class="dot"></span>${r}</span>`;
 
 const fmtK = (n) => {
   if (n == null) return "";
@@ -48,10 +47,9 @@ function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
   const y = (v) => h - (v / maxY) * h;
 
   const COLORS = [
-    "oklch(0.22 0.06 262)", "oklch(0.62 0.13 165)", "oklch(0.70 0.13 75)",
-    "oklch(0.58 0.18 25)",  "oklch(0.55 0.10 230)", "oklch(0.45 0.10 300)",
-    "oklch(0.65 0.15 200)", "oklch(0.72 0.12 50)",  "oklch(0.50 0.14 150)",
-    "oklch(0.60 0.10 320)", "oklch(0.68 0.08 90)",
+    "var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)",
+    "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)",
+    "var(--chart-9)", "var(--chart-10)", "var(--chart-11)",
   ];
 
   const polys = series.map((s, si) => {
@@ -83,7 +81,7 @@ function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
           <g>
             <line x1={x(hlIdx)} y1={0} x2={x(hlIdx)} y2={h} stroke="var(--ink)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5" />
             <rect x={x(hlIdx) - 18} y={-8} width={36} height={14} fill="var(--primary)" rx="3" />
-            <text x={x(hlIdx)} y={1} fontSize="9" fill="#fff" textAnchor="middle" fontFamily="Geist Mono" fontWeight="600">{highlightX}</text>
+            <text x={x(hlIdx)} y={1} fontSize="9" fill="var(--primary-ink)" textAnchor="middle" fontFamily="Geist Mono" fontWeight="600">{highlightX}</text>
           </g>
         )}
         {xLabels.map((lbl, i) => (
@@ -228,8 +226,8 @@ function Treemap({ items, height = 380, onPick }) {
       {out.map((r, i) => (
         <g key={i} style={{ cursor: "pointer" }} onClick={() => onPick && onPick(r)}>
           <rect x={r.x + 2} y={r.y + 2} width={r.w - 4} height={r.h - 4} fill={colorFor(r.risk)} opacity="0.85" rx="3" />
-          <text x={r.x + 12} y={r.y + 22} fontSize="13" fill="#fff" fontWeight="600">{r.name}</text>
-          <text x={r.x + 12} y={r.y + 38} fontSize="11" fill="#fff" opacity="0.85" fontFamily="Geist Mono">€{r.value}M</text>
+          <text x={r.x + 12} y={r.y + 22} fontSize="13" fill="var(--card)" fontWeight="600">{r.name}</text>
+          <text x={r.x + 12} y={r.y + 38} fontSize="11" fill="var(--card)" opacity="0.85" fontFamily="Geist Mono">€{r.value}M</text>
         </g>
       ))}
     </svg>

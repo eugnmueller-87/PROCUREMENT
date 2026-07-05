@@ -1,4 +1,4 @@
-// SpendLens — Category Strategy screen (placeholder with framework structure)
+// SpendLens — Category Strategy screen
 const { useState: useS, useEffect: useE } = React;
 
 const FRAMEWORKS = ["Kraljic Matrix", "PESTEL", "SWOT", "Porter's Five Forces", "TCO Breakdown", "Negotiation Levers", "Strategy Recommendation"];
@@ -7,6 +7,7 @@ function Strategy({ openDrawer, api }) {
   const [cat, setCat] = useS("Cloud & Compute");
   const [activeFrame, setActiveFrame] = useS(0);
   const [generating, setGenerating] = useS(false);
+  const [error, setError] = useS("");
   const [content, setContent] = useS({});
 
   const CATS = [
@@ -20,18 +21,37 @@ function Strategy({ openDrawer, api }) {
 
   const generate = async () => {
     setGenerating(true);
-    // Simulate generation with placeholder content
-    await new Promise(r => setTimeout(r, 1500));
-    setContent(prev => ({
-      ...prev,
-      [cat]: {
-        kraljic: { x: 0.7, y: 0.8, label: "Strategic", quadrant: "Strategic — high spend, high risk" },
-        pestel: ["Political: EU AI Act impacts AI/ML procurement", "Economic: Cloud inflation 8% YoY", "Technology: Multi-cloud shift reducing vendor lock-in"],
-        swot: { strengths: ["Volume leverage", "Long-term contracts"], weaknesses: ["Single-source risk", "Limited alternatives"], opportunities: ["Reserved instances", "Negotiate SLAs"], threats: ["Price increases", "Provider lock-in"] },
-        levers: ["Volume consolidation", "Multi-year commitment discount", "Reserved capacity pricing", "Competitive RFP"],
-        recommendation: `For ${cat}: consolidate spend with top 2-3 suppliers, negotiate 3-year framework agreements with quarterly review gates. Target 15% cost reduction through volume bundling and reserved capacity commitments.`,
+    setError("");
+    try {
+      const res = await fetch(`${api}/api/strategy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: cat }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Error ${res.status}`);
       }
-    }));
+      const data = await res.json();
+      const s = data.strategy;
+      setContent(prev => ({
+        ...prev,
+        [cat]: {
+          kraljic: {
+            quadrant: `${s.kraljic.quadrant} — ${s.kraljic.rationale}`,
+            label: s.kraljic.quadrant,
+          },
+          pestel: s.pestel,
+          swot: s.swot,
+          porter: s.porter,
+          tco: s.tco,
+          levers: s.levers,
+          recommendation: s.recommendation,
+        },
+      }));
+    } catch (e) {
+      setError(e.message || "Generation failed");
+    }
     setGenerating(false);
   };
 
@@ -51,6 +71,8 @@ function Strategy({ openDrawer, api }) {
         </div>
       </div>
 
+      {error && <div style={{ padding: "10px 14px", background: "var(--bad-soft)", borderRadius: "var(--r-sm)", color: "var(--bad)", fontSize: 13 }}>{error}</div>}
+
       {/* Framework tabs */}
       <div className="seg" style={{ width: "100%" }}>
         {FRAMEWORKS.map((f, i) => (
@@ -66,42 +88,35 @@ function Strategy({ openDrawer, api }) {
             <div className="txt-sm" style={{ marginTop: 6 }}>Click <strong>Generate All Frameworks</strong> to start the analysis</div>
           </div>
         )
-        : activeFrame === 0
-          ? <KraljicView data={c.kraljic} cat={cat} />
-          : activeFrame === 1
-            ? <ListFramework title="PESTEL Analysis" items={c.pestel} />
-            : activeFrame === 2
-              ? <SwotView data={c.swot} />
-              : activeFrame === 5
-                ? <ListFramework title="Negotiation Levers" items={c.levers} />
-                : activeFrame === 6
-                  ? <RecommendationView text={c.recommendation} cat={cat} />
-                  : (
-                    <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>
-                      {FRAMEWORKS[activeFrame]} — coming soon
-                    </div>
-                  )
+        : activeFrame === 0 ? <KraljicView data={c.kraljic} cat={cat} />
+        : activeFrame === 1 ? <ListFramework title="PESTEL Analysis" items={c.pestel} />
+        : activeFrame === 2 ? <SwotView data={c.swot} />
+        : activeFrame === 3 ? <ListFramework title="Porter's Five Forces" items={c.porter} />
+        : activeFrame === 4 ? <ListFramework title="TCO Breakdown" items={c.tco} />
+        : activeFrame === 5 ? <ListFramework title="Negotiation Levers" items={c.levers} />
+        : <RecommendationView text={c.recommendation} cat={cat} />
       }
     </div>
   );
 }
 
 function KraljicView({ data, cat }) {
-  const colors = { Strategic: "var(--bad)", Leverage: "var(--good)", Bottleneck: "var(--warn)", Non_critical: "var(--info)" };
+  const quadrants = [
+    { label: "Bottleneck",    desc: "Low spend, high risk",  color: "var(--warn-soft)" },
+    { label: "Strategic",     desc: "High spend, high risk", color: "var(--bad-soft)"  },
+    { label: "Non-critical",  desc: "Low spend, low risk",   color: "var(--bg-sunk)"   },
+    { label: "Leverage",      desc: "High spend, low risk",  color: "var(--good-soft)" },
+  ];
+  const activeLabel = data.label || "Strategic";
   return (
     <div className="card">
       <div className="card-h"><h3>Kraljic Matrix</h3><span className="sub">{cat}</span></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 2, height: 320, border: "1px solid var(--hairline)", borderRadius: "var(--r-sm)", overflow: "hidden" }}>
-        {[
-          { label: "Bottleneck", desc: "Low spend, high risk", pos: "top-left", color: "var(--warn-soft)" },
-          { label: "Strategic", desc: "High spend, high risk", pos: "top-right", color: "var(--bad-soft)" },
-          { label: "Non-critical", desc: "Low spend, low risk", pos: "bottom-left", color: "var(--bg-sunk)" },
-          { label: "Leverage", desc: "High spend, low risk", pos: "bottom-right", color: "var(--good-soft)" },
-        ].map(q => (
+        {quadrants.map(q => (
           <div key={q.label} style={{ background: q.color, padding: 16, position: "relative", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
             <div style={{ fontWeight: 600, fontSize: 13 }}>{q.label}</div>
             <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{q.desc}</div>
-            {q.label === "Strategic" && (
+            {q.label === activeLabel && (
               <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 36, height: 36, borderRadius: "50%", background: "var(--primary)", display: "grid", placeItems: "center", color: "#fff", fontSize: 10, fontWeight: 600 }}>
                 {cat.split(" ")[0].slice(0, 3)}
               </div>

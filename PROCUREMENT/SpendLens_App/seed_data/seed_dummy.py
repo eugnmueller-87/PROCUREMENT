@@ -35,7 +35,7 @@ from modules.flag_engine     import run_flag_engine
 from modules.database        import (
     init_database, get_connection, log_upload,
     insert_raw_transactions, insert_enriched_transactions,
-    bulk_upsert_vendors, upsert_vendor,
+    upsert_vendor,
 )
 from modules.supplier_profiler import compute_and_save_profiles
 

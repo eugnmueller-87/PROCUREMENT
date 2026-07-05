@@ -1,6 +1,11 @@
 // SpendLens — app shell (sidebar, topbar, command palette, drawer)
 const { useState, useEffect, useRef, useMemo } = React;
 
+// Enter/Space activation for div-based buttons (keyboard accessibility)
+const keyActivate = (fn) => (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(e); }
+};
+
 const NAV = [
   { id: "dashboard",  label: "Dashboard",         icon: "Dashboard" },
   { id: "deepdive",   label: "Deep Dive",         icon: "DeepDive" },
@@ -42,7 +47,9 @@ function Sidebar({ active, onNav }) {
 function NavItem({ item, active, onNav }) {
   const Ico = Icons[item.icon];
   return (
-    <div className={`sb-item${active ? " active" : ""}`} onClick={() => onNav(item.id)}>
+    <div className={`sb-item${active ? " active" : ""}`} role="button" tabIndex={0}
+      aria-current={active ? "page" : undefined}
+      onClick={() => onNav(item.id)} onKeyDown={keyActivate(() => onNav(item.id))}>
       <div className="sb-item-icon">{Ico && <Ico />}</div>
       <div className="sb-item-label">
         {item.label}
@@ -57,23 +64,22 @@ function NavItem({ item, active, onNav }) {
 
 const NAV_LABELS = Object.fromEntries(NAV.map(n => [n.id, n.label]));
 
-// ── Notifications data ──────────────────────────────────────────────────────────
-const NOTIFICATIONS = [
-  { id: 1, type: "critical", title: "Contract overdue", body: "Deloitte MSA expired 47 days ago", time: "Today", action: "clm" },
-  { id: 2, type: "warn",     title: "Budget overrun",   body: "Cloud & Compute 9% over budget", time: "Today", action: "deepdive" },
-  { id: 3, type: "warn",     title: "Contract expiring", body: "OpenAI API agreement expires in 44 days", time: "Yesterday", action: "clm" },
-  { id: 4, type: "info",     title: "New Icarus signals", body: "3 new market signals in AI/ML category", time: "2h ago", action: "icarus" },
-  { id: 5, type: "good",     title: "DD complete",      body: "Supplier due diligence for AWS finished", time: "3h ago", action: "supplier" },
-];
-
-function TopBar({ active, onOpenCmd, onMenu, onNav }) {
+function TopBar({ active, onOpenCmd, onMenu, onNav, api }) {
   const [bellOpen, setBellOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [alerts, setAlerts] = useState([]);
   const [dismissed, setDismissed] = useState([]);
   const bellRef = useRef(null);
 
-  const unread = NOTIFICATIONS.filter(n => !dismissed.includes(n.id));
+  useEffect(() => {
+    fetch(`${api}/api/alerts`)
+      .then(r => r.json())
+      .then(d => setAlerts(d.alerts || []))
+      .catch(() => {});
+  }, []);
+
+  const unread = alerts.filter(n => !dismissed.includes(n.id));
 
   useEffect(() => {
     function handler(e) {
@@ -86,25 +92,29 @@ function TopBar({ active, onOpenCmd, onMenu, onNav }) {
   return (
     <>
       <header className="tb">
-        <div className="tb-btn" onClick={onMenu}><Icons.Menu /></div>
+        <div className="tb-btn" role="button" tabIndex={0} aria-label="Toggle sidebar" onClick={onMenu} onKeyDown={keyActivate(onMenu)}><Icons.Menu /></div>
         <div className="crumbs">
           <span>SpendLens</span>
           <Icons.ChevR size={12} color="var(--ink-4)" />
           <strong>{NAV_LABELS[active] || active}</strong>
         </div>
-        <div className="tb-search" onClick={onOpenCmd}>
+        <div className="tb-search" role="button" tabIndex={0} aria-label="Search" onClick={onOpenCmd} onKeyDown={keyActivate(onOpenCmd)}>
           <Icons.Search size={14} />
           <span>Search suppliers, contracts, categories…</span>
-          <span className="kbd">⌘K</span>
+          <span className="kbd">{navigator.platform.toLowerCase().includes("mac") ? "⌘K" : "Ctrl K"}</span>
         </div>
         <div className="tb-actions">
-          <div className="tb-btn" title="AI Assistant" onClick={() => { setAiOpen(true); setBellOpen(false); setSettingsOpen(false); }}>
+          <div className="tb-btn" title="AI Assistant" role="button" tabIndex={0} aria-label="AI Assistant"
+            onClick={() => { setAiOpen(true); setBellOpen(false); setSettingsOpen(false); }}
+            onKeyDown={keyActivate(() => { setAiOpen(true); setBellOpen(false); setSettingsOpen(false); })}>
             <Icons.Sparkles />
           </div>
 
           {/* Bell with dropdown */}
           <div style={{ position: "relative" }} ref={bellRef}>
-            <div className="tb-btn" title="Notifications" onClick={() => { setBellOpen(o => !o); setAiOpen(false); setSettingsOpen(false); }}>
+            <div className="tb-btn" title="Notifications" role="button" tabIndex={0} aria-label="Notifications"
+              onClick={() => { setBellOpen(o => !o); setAiOpen(false); setSettingsOpen(false); }}
+              onKeyDown={keyActivate(() => { setBellOpen(o => !o); setAiOpen(false); setSettingsOpen(false); })}>
               <Icons.Bell />
               {unread.length > 0 && <span className="dot" style={{ position: "absolute", top: 6, right: 6 }} />}
             </div>
@@ -112,13 +122,13 @@ function TopBar({ active, onOpenCmd, onMenu, onNav }) {
               <div style={{
                 position: "absolute", top: "calc(100% + 8px)", right: 0, width: 320, zIndex: 200,
                 background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--r)",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.12)", overflow: "hidden",
+                boxShadow: "var(--shadow-3)", overflow: "hidden",
               }}>
                 <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontWeight: 600, fontSize: 13 }}>Notifications</span>
                   {unread.length > 0 && (
                     <span style={{ fontSize: 11, color: "var(--primary)", cursor: "pointer" }}
-                      onClick={() => setDismissed(NOTIFICATIONS.map(n => n.id))}>
+                      onClick={() => setDismissed(alerts.map(n => n.id))}>
                       Mark all read
                     </span>
                   )}
@@ -149,7 +159,9 @@ function TopBar({ active, onOpenCmd, onMenu, onNav }) {
           </div>
 
           {/* Settings */}
-          <div className="tb-btn" title="Settings" onClick={() => { setSettingsOpen(true); setBellOpen(false); setAiOpen(false); }}>
+          <div className="tb-btn" title="Settings" role="button" tabIndex={0} aria-label="Settings"
+            onClick={() => { setSettingsOpen(true); setBellOpen(false); setAiOpen(false); }}
+            onKeyDown={keyActivate(() => { setSettingsOpen(true); setBellOpen(false); setAiOpen(false); })}>
             <Icons.Cog />
           </div>
         </div>
@@ -203,19 +215,19 @@ function AIAssistant({ onClose }) {
     <div style={{
       position: "fixed", top: 0, right: 0, bottom: 0, width: 380, zIndex: 300,
       background: "var(--bg)", borderLeft: "1px solid var(--border)",
-      boxShadow: "-8px 0 32px rgba(0,0,0,0.10)", display: "flex", flexDirection: "column",
+      boxShadow: "var(--shadow-3)", display: "flex", flexDirection: "column",
     }}>
       <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--hairline)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--primary)", display: "grid", placeItems: "center" }}>
-            <Icons.Spark size={14} color="#fff" />
+          <div style={{ width: 28, height: 28, borderRadius: "var(--r-sm)", background: "var(--primary)", display: "grid", placeItems: "center" }}>
+            <Icons.Spark size={14} color="var(--primary-ink)" />
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>Procurement AI</div>
             <div style={{ fontSize: 11, color: "var(--good)" }}>● Online</div>
           </div>
         </div>
-        <div className="tb-btn" onClick={onClose}><Icons.X size={16} /></div>
+        <div className="tb-btn" role="button" tabIndex={0} aria-label="Close" onClick={onClose} onKeyDown={keyActivate(onClose)}><Icons.X size={16} /></div>
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -236,7 +248,7 @@ function AIAssistant({ onClose }) {
             <div style={{
               maxWidth: "85%", padding: "10px 14px", borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
               background: m.role === "user" ? "var(--primary)" : "var(--bg-sunk)",
-              color: m.role === "user" ? "#fff" : "var(--ink)", fontSize: 13, lineHeight: 1.55,
+              color: m.role === "user" ? "var(--primary-ink)" : "var(--ink)", fontSize: 13, lineHeight: 1.55,
               whiteSpace: "pre-line",
             }}>{m.text}</div>
           </div>
@@ -255,7 +267,7 @@ function AIAssistant({ onClose }) {
         <input value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && send()}
           placeholder="Ask about spend, suppliers, contracts…"
-          style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-sunk)", fontSize: 13, color: "var(--ink)", outline: "none" }} />
+          style={{ flex: 1, padding: "8px 12px", borderRadius: "var(--r-sm)", border: "1px solid var(--border)", background: "var(--bg-sunk)", fontSize: 13, color: "var(--ink)" }} />
         <button className="btn primary" onClick={send} disabled={loading || !input.trim()}>
           <Icons.Bolt size={14} />
         </button>
@@ -273,19 +285,20 @@ function SettingsPanel({ onClose }) {
     const next = !dark;
     setDark(next);
     document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
+    localStorage.setItem("theme", next ? "dark" : "light");
   };
 
   return (
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 290, background: "rgba(0,0,0,0.3)" }} onClick={onClose} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 290, background: "var(--scrim)" }} onClick={onClose} />
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 340, zIndex: 300,
         background: "var(--bg)", borderLeft: "1px solid var(--border)",
-        boxShadow: "-8px 0 32px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column",
+        boxShadow: "var(--shadow-3)", display: "flex", flexDirection: "column",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--hairline)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 600, fontSize: 15 }}>Settings</span>
-          <div className="tb-btn" onClick={onClose}><Icons.X size={16} /></div>
+          <div className="tb-btn" role="button" tabIndex={0} aria-label="Close" onClick={onClose} onKeyDown={keyActivate(onClose)}><Icons.X size={16} /></div>
         </div>
         <div style={{ flex: 1, overflow: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 24 }}>
 
@@ -297,13 +310,13 @@ function SettingsPanel({ onClose }) {
                 <div style={{ fontSize: 13, fontWeight: 500 }}>Dark mode</div>
                 <div style={{ fontSize: 11, color: "var(--ink-3)" }}>Toggle light / dark theme</div>
               </div>
-              <div onClick={toggleDark} style={{
+              <div onClick={toggleDark} onKeyDown={keyActivate(toggleDark)} role="switch" aria-checked={dark} aria-label="Dark mode" tabIndex={0} style={{
                 width: 40, height: 22, borderRadius: 11, background: dark ? "var(--primary)" : "var(--border-2)",
                 position: "relative", cursor: "pointer", transition: "background 0.2s",
               }}>
                 <div style={{
                   position: "absolute", top: 3, left: dark ? 21 : 3, width: 16, height: 16,
-                  borderRadius: "50%", background: "#fff", transition: "left 0.2s",
+                  borderRadius: "50%", background: "var(--card)", transition: "left 0.2s",
                 }} />
               </div>
             </div>
@@ -324,8 +337,8 @@ function SettingsPanel({ onClose }) {
           {/* Account */}
           <div>
             <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-3)", marginBottom: 12 }}>Account</div>
-            <div style={{ background: "var(--bg-sunk)", borderRadius: 10, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--primary)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 600, fontSize: 14 }}>EM</div>
+            <div style={{ background: "var(--bg-sunk)", borderRadius: "var(--r)", padding: "12px 14px", display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--primary)", display: "grid", placeItems: "center", color: "var(--primary-ink)", fontWeight: 600, fontSize: 14 }}>EM</div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Eugen M.</div>
                 <div style={{ fontSize: 11, color: "var(--ink-3)" }}>Procurement Manager</div>
@@ -406,7 +419,7 @@ function Drawer({ open, onClose, title, children }) {
       <div className={`drawer${open ? " open" : ""}`}>
         <div className="drawer-h">
           <div style={{ fontWeight: 600, fontSize: 15 }}>{title}</div>
-          <div className="tb-btn" onClick={onClose}><Icons.X size={16} /></div>
+          <div className="tb-btn" role="button" tabIndex={0} aria-label="Close" onClick={onClose} onKeyDown={keyActivate(onClose)}><Icons.X size={16} /></div>
         </div>
         <div className="drawer-body">{children}</div>
       </div>

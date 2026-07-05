@@ -1,0 +1,198 @@
+{
+  "Amazon Web Services": {
+    "category": "Cloud & Compute",
+    "location": null
+  },
+  "Microsoft": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Salesforce": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Personio": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "Slack": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "WeWork": {
+    "category": "Real Estate",
+    "location": null
+  },
+  "Lufthansa": {
+    "category": "Travel & Expenses",
+    "location": null
+  },
+  "Google Cloud Platform": {
+    "category": "Cloud & Compute",
+    "location": null
+  },
+  "OpenAI": {
+    "category": "AI/ML APIs & Data",
+    "location": null
+  },
+  "Workday": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "KPMG": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Stripe": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Twilio": {
+    "category": "Telecom & Voice",
+    "location": null
+  },
+  "LinkedIn": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "Snowflake": {
+    "category": "Cloud & Compute",
+    "location": null
+  },
+  "Zoom": {
+    "category": "Telecom & Voice",
+    "location": null
+  },
+  "HubSpot": {
+    "category": "Marketing & Campaigns",
+    "location": null
+  },
+  "McKinsey": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "SAP": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Anthropic": {
+    "category": "AI/ML APIs & Data",
+    "location": null
+  },
+  "Datadog": {
+    "category": "Cloud & Compute",
+    "location": null
+  },
+  "Stepstone": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "Deloitte": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Booking.com": {
+    "category": "Travel & Expenses",
+    "location": null
+  },
+  "Celonis": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Contentful": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Fiverr": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Personio GmbH": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "WeWork Germany GmbH": {
+    "category": "Real Estate",
+    "location": "Germany"
+  },
+  "Lufthansa AG": {
+    "category": "Travel & Expenses",
+    "location": null
+  },
+  "OpenAI Inc.": {
+    "category": "AI/ML APIs & Data",
+    "location": null
+  },
+  "Workday Inc.": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "KPMG AG Wirtschaftsprüfungsgesellschaft": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Datadog Inc.": {
+    "category": "Cloud & Compute",
+    "location": null
+  },
+  "Snowflake Inc.": {
+    "category": "Cloud & Compute",
+    "location": null
+  },
+  "Anthropic PBC": {
+    "category": "AI/ML APIs & Data",
+    "location": null
+  },
+  "Twilio Inc.": {
+    "category": "Telecom & Voice",
+    "location": null
+  },
+  "Stripe Inc.": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "SAP SE": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Celonis SE": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "LinkedIn Ireland Unlimited": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "HubSpot Inc.": {
+    "category": "Marketing & Campaigns",
+    "location": null
+  },
+  "McKinsey & Company": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Zoom Video Communications": {
+    "category": "Telecom & Voice",
+    "location": null
+  },
+  "Contentful GmbH": {
+    "category": "IT Software & SaaS",
+    "location": null
+  },
+  "Fiverr International": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Stepstone GmbH": {
+    "category": "Recruitment & HR",
+    "location": null
+  },
+  "Deloitte GmbH Wirtschaftsprüfungsgesellschaft": {
+    "category": "Professional Services",
+    "location": null
+  },
+  "Booking.com B.V.": {
+    "category": "Travel & Expenses",
+    "location": null
+  }
+}

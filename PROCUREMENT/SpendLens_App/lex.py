@@ -21,7 +21,7 @@ import anthropic
 
 # ── Optional document parsers (graceful degradation) ──────────────────────────
 try:
-    import fitz          # PyMuPDF
+    import fitz  # noqa: F401
     PYMUPDF_OK = True
 except ImportError:
     PYMUPDF_OK = False

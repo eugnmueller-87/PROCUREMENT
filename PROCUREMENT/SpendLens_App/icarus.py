@@ -1033,7 +1033,7 @@ Return ONLY valid JSON (no markdown, no extra text):
             print(f"[Icarus] JSON parse failed ({parse_err}), returning raw text")
             # Fall back: return the raw text as executive summary so the user sees something
             return {
-                "title": f"Negotiation Brief",
+                "title": "Negotiation Brief",
                 "executive_summary": raw[:3000],
                 "market_context": [], "negotiation_levers": [],
                 "key_requirements": [], "risk_areas": [],

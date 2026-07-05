@@ -3,6 +3,27 @@ const { useState: useS, useEffect: useE } = React;
 
 const API = "";  // same origin
 
+// Catches runtime errors in a screen so the shell/nav always survives
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidUpdate(prev) {
+    if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null });
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="card" style={{ maxWidth: 480, margin: "60px auto", textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Something went wrong on this screen</div>
+          <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 14 }}>{String(this.state.error?.message || this.state.error)}</div>
+          <button className="btn" onClick={() => location.reload()}>Reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   const [route, setRoute] = useS(location.hash.replace("#", "") || "dashboard");
   const [sbExpanded, setSbExpanded] = useS(false);
@@ -37,7 +58,7 @@ function App() {
   const closeDrawer = () => setDrawer(null);
 
   // Make openDrawer globally accessible for screens
-  window.__openDrawer = openDrawer;
+  useE(() => { window.__openDrawer = openDrawer; }, []);
 
   const screens = {
     dashboard:  window.Dashboard,
@@ -65,12 +86,14 @@ function App() {
       <div onMouseEnter={() => setSbExpanded(true)} style={{ gridArea: "sb", display: "contents" }}>
         <Sidebar active={route} onNav={nav} />
       </div>
-      <TopBar active={route} onOpenCmd={() => setCmdOpen(true)} onMenu={() => setSbExpanded(s => !s)} onNav={nav} />
+      <TopBar active={route} onOpenCmd={() => setCmdOpen(true)} onMenu={() => setSbExpanded(s => !s)} onNav={nav} api={API} />
       <main className="main">
-        {Screen
-          ? <Screen openDrawer={openDrawer} api={API} />
-          : <div style={{ padding: 40, color: "var(--ink-3)" }}>Screen not found: {route}</div>
-        }
+        <ErrorBoundary resetKey={route}>
+          {Screen
+            ? <Screen openDrawer={openDrawer} api={API} />
+            : <div style={{ padding: 40, color: "var(--ink-3)" }}>Screen not found: {route}</div>
+          }
+        </ErrorBoundary>
       </main>
 
       <CmdPalette open={cmdOpen} onClose={() => setCmdOpen(false)} onNav={nav} />

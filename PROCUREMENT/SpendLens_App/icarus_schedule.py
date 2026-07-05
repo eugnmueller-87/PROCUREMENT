@@ -21,7 +21,6 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Working directory ─────────────────────────────────────────────────────────

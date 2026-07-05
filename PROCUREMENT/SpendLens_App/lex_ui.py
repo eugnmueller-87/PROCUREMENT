@@ -2,7 +2,6 @@
 Lex CLM UI — Contract Lifecycle Management Tab for SpendLens
 """
 
-import os
 import json
 import threading
 import panel as pn
@@ -184,7 +183,8 @@ class LexPanel(param.Parameterized):
             self._filename = filename
             pn.state.execute(lambda: self._render_result(result))
         except Exception as e:
-            pn.state.execute(lambda: self._show_error(str(e)))
+            err_msg = str(e)
+            pn.state.execute(lambda: self._show_error(err_msg))
         finally:
             pn.state.execute(lambda: setattr(self._scan_btn, "disabled", False))
 
@@ -203,7 +203,6 @@ class LexPanel(param.Parameterized):
         filename  = result.get("filename", "")
 
         # ── Result header ─────────────────────────────────────────────────────
-        color = RISK_COLOR.get(level, DIM)
         header = (
             f"<div style='background:{CARD};border:1px solid {BORDER};border-radius:12px;"
             f"padding:20px 24px;margin-bottom:14px'>"
@@ -343,7 +342,6 @@ class LexPanel(param.Parameterized):
             score = row.get("risk_score") or 0
             end   = row.get("end_date") or "—"
             vendor = row.get("vendor_name") or "—"
-            fname = row.get("filename") or "—"
             ctype = row.get("contract_type") or "—"
             scanned = (row.get("scanned_at") or "")[:10]
             rows += (
