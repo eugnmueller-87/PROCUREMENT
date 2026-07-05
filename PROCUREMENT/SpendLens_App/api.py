@@ -13,48 +13,172 @@ Production (Railway):
 import os
 import io
 import json
+import logging
+import re
+import secrets
 import sqlite3
+import threading
+import time
+from collections import defaultdict, deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 import httpx
+from contextlib import asynccontextmanager
 from difflib import get_close_matches
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Body, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File, Form, Depends, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from modules.database import (
+from modules.database import (  # noqa: E402
     get_connection, init_database,
-    get_full_transaction_view, get_maverick_transactions,
-    get_contracts, get_expiring_contracts,
+    get_full_transaction_view, get_contracts, get_expiring_contracts,
 )
-from modules.supplier_profiler import (
-    get_supplier_profiles, build_demo_profiles, TAXONOMY,
+from modules.supplier_profiler import (  # noqa: E402
+    get_supplier_profiles, build_demo_profiles, compute_and_save_profiles, TAXONOMY,
 )
+from modules.column_mapper import rule_based_mapping, ai_column_mapping, apply_mapping  # noqa: E402
+from modules.data_cleanup import full_cleanup  # noqa: E402
+from modules.category_mapper import run_category_mapping  # noqa: E402
+from modules.flag_engine import run_flag_engine  # noqa: E402
+from modules.database import log_upload, insert_raw_transactions, insert_enriched_transactions  # noqa: E402
 
 CLIENT = os.environ.get("SPENDLENS_CLIENT", "default")
 HADES_URL = os.environ.get("HADES_URL", "")
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
+logger = logging.getLogger("spendlens.api")
+
+# ── Auth ───────────────────────────────────────────────────────────────────────
+# Shared-secret API key. Set SPENDLENS_API_KEY on Railway to enforce auth on all
+# /api routes (clients must send an X-API-Key header). When unset (local dev),
+# auth is disabled and the interactive docs stay available.
+
+SPENDLENS_API_KEY = os.environ.get("SPENDLENS_API_KEY", "")
+
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def require_key(key: Optional[str] = Security(_api_key_header)):
+    if not SPENDLENS_API_KEY:
+        return  # auth not configured — dev mode
+    if not key or not secrets.compare_digest(key, SPENDLENS_API_KEY):
+        raise HTTPException(401, "Invalid or missing API key")
+
+
+# ── Rate limiting (lightweight, in-process) ────────────────────────────────────
+# Backstop against cost abuse on Anthropic-billed / expensive endpoints.
+
+_rate_lock = threading.Lock()
+_rate_hits: dict[str, deque] = defaultdict(deque)
+
+
+def rate_limit(name: str, max_calls: int, per_seconds: int):
+    def _dep(request: Request):
+        ip = request.client.host if request.client else "unknown"
+        bucket_key = f"{name}:{ip}"
+        now = time.monotonic()
+        with _rate_lock:
+            hits = _rate_hits[bucket_key]
+            while hits and now - hits[0] > per_seconds:
+                hits.popleft()
+            if len(hits) >= max_calls:
+                raise HTTPException(429, "Rate limit exceeded — try again later")
+            hits.append(now)
+    return _dep
+
+
+# ── Upload limits ──────────────────────────────────────────────────────────────
+
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
+async def _read_upload(file: UploadFile, allowed_exts: set[str]) -> bytes:
+    """Read an upload with an extension allowlist and a hard size cap."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed_exts:
+        raise HTTPException(415, f"Unsupported file type — expected {', '.join(sorted(allowed_exts))}")
+    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "File too large (max 25 MB)")
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1 << 20):
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "File too large (max 25 MB)")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 # ── Init DB ────────────────────────────────────────────────────────────────────
 init_database(CLIENT)
 
-# ── App ────────────────────────────────────────────────────────────────────────
-app = FastAPI(title="SpendLens API", version="2.0", docs_url="/api/docs")
+# ── Hades proxy ────────────────────────────────────────────────────────────────
 
+_hades_client: httpx.AsyncClient | None = None
+
+
+@asynccontextmanager
+async def _lifespan(app):
+    global _hades_client
+    _hades_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5))
+    yield
+    if _hades_client:
+        await _hades_client.aclose()
+
+
+# ── App ────────────────────────────────────────────────────────────────────────
+# Interactive docs are disabled in production (i.e. whenever auth is enforced).
+app = FastAPI(
+    title="SpendLens API",
+    version="2.0",
+    docs_url=None if SPENDLENS_API_KEY else "/api/docs",
+    lifespan=_lifespan,
+    dependencies=[Depends(require_key)],
+)
+
+# Lock origins to the real domain in production via SPENDLENS_ALLOWED_ORIGINS
+# (comma-separated), e.g. "https://spendlens.up.railway.app,http://localhost:8000".
+# Defaults to "*" — the SPA is served same-origin, so CORS is barely needed.
+_allowed_origins = [
+    o.strip()
+    for o in os.environ.get("SPENDLENS_ALLOWED_ORIGINS", "*").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_allowed_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "X-API-Key"],
 )
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # unsafe-inline/unsafe-eval are required by the inline theme script and
+    # in-browser Babel JSX transpilation (see frontend/index.html).
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    return response
 
 
 def _conn():
@@ -63,21 +187,6 @@ def _conn():
 
 def _spend_col(df: pd.DataFrame) -> str:
     return "spend_eur" if "spend_eur" in df.columns and df["spend_eur"].notna().any() else "spend"
-
-
-# ── Hades proxy ────────────────────────────────────────────────────────────────
-
-_hades_client: httpx.AsyncClient | None = None
-
-@app.on_event("startup")
-async def _startup():
-    global _hades_client
-    _hades_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5))
-
-@app.on_event("shutdown")
-async def _shutdown():
-    if _hades_client:
-        await _hades_client.aclose()
 
 
 def _require_hades() -> str:
@@ -96,29 +205,43 @@ async def hades_health():
     except Exception:
         return {"status": "offline"}
 
-@app.post("/api/hades/investigate")
-async def hades_investigate(payload: dict = Body(...)):
+class HadesInvestigateRequest(BaseModel):
+    """Shape of the Hades /investigate contract — only these keys are forwarded."""
+    company: str = Field(..., min_length=1, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+    country: Optional[str] = Field(None, max_length=100)
+    mode: Optional[str] = Field(None, max_length=50)
+
+
+@app.post("/api/hades/investigate", dependencies=[Depends(rate_limit("hades", 5, 60))])
+async def hades_investigate(payload: HadesInvestigateRequest):
     url = _require_hades()
     try:
-        r = await _hades_client.post(f"{url}/investigate", json=payload, timeout=110)
+        r = await _hades_client.post(f"{url}/investigate", json=payload.model_dump(exclude_none=True), timeout=110)
         r.raise_for_status()
         return r.json()
     except httpx.HTTPStatusError as e:
-        raise HTTPException(e.response.status_code, e.response.text[:200])
-    except Exception as e:
-        raise HTTPException(502, str(e))
+        logger.warning("Hades investigate returned %s: %s", e.response.status_code, e.response.text[:200])
+        raise HTTPException(e.response.status_code, "Upstream service error")
+    except Exception:
+        logger.exception("Hades investigate failed")
+        raise HTTPException(502, "Upstream service error")
 
 @app.get("/api/hades/result/{task_id}")
 async def hades_result(task_id: str):
     url = _require_hades()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", task_id):
+        raise HTTPException(400, "Invalid task id")
     try:
         r = await _hades_client.get(f"{url}/result/{task_id}", timeout=10)
         r.raise_for_status()
         return r.json()
     except httpx.HTTPStatusError as e:
-        raise HTTPException(e.response.status_code, e.response.text[:200])
-    except Exception as e:
-        raise HTTPException(502, str(e))
+        logger.warning("Hades result returned %s: %s", e.response.status_code, e.response.text[:200])
+        raise HTTPException(e.response.status_code, "Upstream service error")
+    except Exception:
+        logger.exception("Hades result fetch failed")
+        raise HTTPException(502, "Upstream service error")
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
@@ -129,8 +252,9 @@ def health():
     try:
         count = conn.execute("SELECT COUNT(*) FROM transactions_raw").fetchone()[0]
         return {"status": "ok", "transactions": count, "client": CLIENT}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        logger.exception("Health check failed")
+        raise HTTPException(500, "Health check failed")
     finally:
         conn.close()
 
@@ -180,7 +304,7 @@ def dashboard(year: Optional[int] = None):
     for cat in TAXONOMY:
         cat_df = df[df["category_mapped"] == cat]
         by_year = cat_df.groupby("_year")["_spend"].sum()
-        trend_data[cat] = {int(y): round(float(v / 1000), 1) for y, v in by_year.items()}
+        trend_data[cat] = {int(y): round(float(v / 1e6), 1) for y, v in by_year.items()}
 
     # Category breakdown
     by_cat = (
@@ -192,8 +316,8 @@ def dashboard(year: Optional[int] = None):
         {
             "id": row["category_mapped"].lower().replace(" ", "_").replace("/", "_").replace("&", "and") if row["category_mapped"] else "other",
             "name": row["category_mapped"] or "Uncategorised",
-            "spend": round(float(row["_spend"]) / 1000, 1),
-            "budget": round(float(row["_spend"]) * 0.92 / 1000, 1),
+            "spend": round(float(row["_spend"]) / 1e6, 1),
+            "budget": round(float(row["_spend"]) * 0.92 / 1e6, 1),
             "risk": "high",
             "suppliers": int(supplier_counts.get(row["category_mapped"], 0)),
             "growth": 0,
@@ -219,7 +343,7 @@ def dashboard(year: Optional[int] = None):
         "years": [int(y) for y in years],
         "selectedYear": year,
         "kpis": {
-            "totalSpend": round(total / 1000, 1),
+            "totalSpend": round(total / 1e6, 1),
             "yoyGrowth": yoy,
             "maverickPct": maverick_pct,
             "poCoverage": po_coverage,
@@ -282,7 +406,6 @@ def _demo_dashboard(year: Optional[int] = None):
     cats = []
     for m in cat_meta:
         spend = year_spend(m["name"], display_year)
-        prev  = year_spend(m["name"], prev_display)
         first = year_spend(m["name"], 2022)
         growth = round((spend - first) / first * 100) if first else 0
         cats.append({
@@ -494,7 +617,7 @@ def list_contracts():
     return {"contracts": result}
 
 
-@app.post("/api/contracts/scan")
+@app.post("/api/contracts/scan", dependencies=[Depends(rate_limit("contract_scan", 5, 60))])
 async def scan_contract(
     file: UploadFile = File(...),
     vendor_name: str = Form(""),
@@ -506,16 +629,17 @@ async def scan_contract(
     except ImportError:
         raise HTTPException(500, "Lex module not available")
 
-    file_bytes = await file.read()
+    file_bytes = await _read_upload(file, {".pdf", ".docx"})
     try:
         result = lex_scan(file_bytes, file.filename, vendor_name, contract_type)
-    except Exception as e:
-        raise HTTPException(500, f"Scan failed: {e}")
+    except Exception:
+        logger.exception("Contract scan failed")
+        raise HTTPException(500, "Contract scan failed")
 
     return result
 
 
-@app.post("/api/contracts/save")
+@app.post("/api/contracts/save", dependencies=[Depends(rate_limit("contract_scan", 5, 60))])
 async def save_contract(
     file: UploadFile = File(...),
     vendor_name: str = Form(""),
@@ -527,11 +651,12 @@ async def save_contract(
     except ImportError:
         raise HTTPException(500, "Lex module not available")
 
-    file_bytes = await file.read()
+    file_bytes = await _read_upload(file, {".pdf", ".docx"})
     try:
         result = lex_scan(file_bytes, file.filename, vendor_name, contract_type)
-    except Exception as e:
-        raise HTTPException(500, f"Scan failed: {e}")
+    except Exception:
+        logger.exception("Contract scan failed")
+        raise HTTPException(500, "Contract scan failed")
 
     conn = _conn()
     try:
@@ -545,16 +670,10 @@ async def save_contract(
 
 # ── Spend upload pipeline ──────────────────────────────────────────────────────
 
-@app.post("/api/upload")
+@app.post("/api/upload", dependencies=[Depends(rate_limit("upload", 5, 60))])
 async def upload_spend(file: UploadFile = File(...)):
     """Upload a CSV/Excel spend file and run the full 5-stage pipeline."""
-    from modules.column_mapper import rule_based_mapping, ai_column_mapping, apply_mapping
-    from modules.data_cleanup import full_cleanup
-    from modules.category_mapper import run_category_mapping
-    from modules.flag_engine import run_flag_engine
-    from modules.database import log_upload, insert_raw_transactions, insert_enriched_transactions, bulk_upsert_vendors
-
-    content = await file.read()
+    content = await _read_upload(file, {".csv", ".xlsx", ".xls"})
     filename = file.filename or "upload.csv"
 
     try:
@@ -562,8 +681,9 @@ async def upload_spend(file: UploadFile = File(...)):
             df_raw = pd.read_csv(io.BytesIO(content), encoding="utf-8-sig")
         else:
             df_raw = pd.read_excel(io.BytesIO(content))
-    except Exception as e:
-        raise HTTPException(400, f"Could not parse file: {e}")
+    except Exception:
+        logger.exception("Could not parse uploaded spend file")
+        raise HTTPException(400, "Could not parse file — expected CSV or Excel")
 
     mapping = rule_based_mapping(df_raw.columns.tolist())
     unmapped = [c for c, v in mapping.items() if v is None]
@@ -572,30 +692,24 @@ async def upload_spend(file: UploadFile = File(...)):
         mapping.update({k: v for k, v in ai_result.items() if v})
 
     df_mapped = apply_mapping(df_raw, mapping)
-    df_clean = full_cleanup(df_mapped)
+    df_clean, _cleanup_report = full_cleanup(df_mapped)
 
     if df_clean.empty:
         raise HTTPException(400, "No valid rows after cleanup")
 
-    vendor_cache_path = Path(__file__).parent / "vendor_cache.json"
-    vendor_cache = {}
-    if vendor_cache_path.exists():
-        with open(vendor_cache_path) as f:
-            vendor_cache = json.load(f)
+    desc_col = next((c for c in df_clean.columns if "description" in c.lower()), None)
+    enriched_df, _re_summary = run_category_mapping(
+        df_clean, vendor_col="supplier", description_col=desc_col, spend_col="spend"
+    )
 
-    classification, vendor_cache = run_category_mapping(df_clean, vendor_cache)
-
-    with open(vendor_cache_path, "w") as f:
-        json.dump(vendor_cache, f, indent=2)
-
-    df_enriched = run_flag_engine(df_clean, classification)
+    flagged_df, _coverage = run_flag_engine(enriched_df)
 
     conn = _conn()
     try:
         upload_id = log_upload(conn, filename, "accounting", len(df_clean), mapping)
         stats = insert_raw_transactions(conn, df_clean, upload_id)
-        insert_enriched_transactions(conn, df_clean, df_enriched)
-        bulk_upsert_vendors(conn, classification)
+        insert_enriched_transactions(conn, df_clean, flagged_df)
+        compute_and_save_profiles(conn, CLIENT)
     finally:
         conn.close()
 
@@ -712,7 +826,7 @@ def signals(category: Optional[str] = None, days: int = 30, limit: int = 50):
         return {"signals": _demo_signals()[:limit], "total": 8, "_demo": True}
 
 
-@app.post("/api/signals/scan")
+@app.post("/api/signals/scan", dependencies=[Depends(rate_limit("signals_scan", 2, 3600))])
 def run_icarus_scan():
     """Trigger an Icarus RSS scan."""
     try:
@@ -720,8 +834,9 @@ def run_icarus_scan():
         result = run(client_name=CLIENT)
         count = len(result.get("signals", [])) if isinstance(result, dict) else 0
         return {"status": "ok", "new_signals": count}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    except Exception:
+        logger.exception("Icarus scan failed")
+        raise HTTPException(500, "Icarus scan failed")
 
 
 # ── ZEUS intelligence endpoints ───────────────────────────────────────────────
@@ -777,6 +892,211 @@ def zeus_supplier_risk(vendor_name: str):
     if risk is None:
         return {"tracked_by_zeus": False, "vendor": vendor_name}
     return {"tracked_by_zeus": True, "vendor": vendor_name, "risk": risk}
+
+
+# ── Category Strategy ─────────────────────────────────────────────────────────
+
+@app.post("/api/strategy", dependencies=[Depends(rate_limit("strategy", 5, 60))])
+async def generate_strategy(body: dict = Body(...)):
+    """
+    Generate procurement strategy frameworks for a spend category using Claude.
+    Returns structured JSON: kraljic, pestel, swot, porter, tco, levers, recommendation.
+    """
+    import anthropic
+
+    category = body.get("category", "")
+    if not category:
+        raise HTTPException(400, "category is required")
+    # Closed vocabulary — prevents prompt injection via arbitrary category text
+    if category not in TAXONOMY:
+        raise HTTPException(400, "Unknown category")
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(503, "ANTHROPIC_API_KEY not configured")
+
+    # Pull real spend data for context
+    conn = _conn()
+    try:
+        df = get_full_transaction_view(conn)
+    finally:
+        conn.close()
+
+    spend_context = ""
+    if not df.empty:
+        sc = _spend_col(df)
+        cat_df = df[df["category_mapped"] == category]
+        if not cat_df.empty:
+            total_spend = float(cat_df[sc].fillna(0).sum())
+            suppliers = cat_df["supplier"].dropna().unique().tolist()[:10]
+            spend_context = (
+                f"Actual spend data: €{total_spend/1000:.0f}k total, "
+                f"{len(suppliers)} active suppliers: {', '.join(suppliers[:5])}."
+            )
+
+    prompt = f"""You are a senior procurement strategist. Generate a complete procurement strategy analysis for the category: {category}.
+
+{spend_context}
+
+Respond ONLY with a valid JSON object using exactly this schema:
+{{
+  "kraljic": {{
+    "quadrant": "Strategic|Leverage|Bottleneck|Non-critical",
+    "spend_impact": "high|low",
+    "supply_risk": "high|low",
+    "rationale": "2-sentence explanation"
+  }},
+  "pestel": [
+    "Political: ...",
+    "Economic: ...",
+    "Social: ...",
+    "Technology: ...",
+    "Environmental: ...",
+    "Legal: ..."
+  ],
+  "swot": {{
+    "strengths": ["...", "...", "..."],
+    "weaknesses": ["...", "...", "..."],
+    "opportunities": ["...", "...", "..."],
+    "threats": ["...", "...", "..."]
+  }},
+  "porter": [
+    "Supplier power: ...",
+    "Buyer power: ...",
+    "Substitutes: ...",
+    "New entrants: ...",
+    "Rivalry: ..."
+  ],
+  "tco": [
+    "Acquisition: ...",
+    "Operations: ...",
+    "Integration: ...",
+    "Exit/switching: ...",
+    "Hidden costs: ..."
+  ],
+  "levers": ["...", "...", "...", "...", "..."],
+  "recommendation": "3-4 sentence strategic recommendation with specific actions and target savings percentage."
+}}
+
+Make all content specific and actionable for the {category} procurement category in a European B2B context. Output only the JSON, no markdown."""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.exception("Strategy generation returned invalid JSON")
+        raise HTTPException(500, "Strategy generation returned invalid data")
+    except Exception:
+        logger.exception("Strategy generation failed")
+        raise HTTPException(500, "Strategy generation failed")
+
+    return {"category": category, "strategy": data}
+
+
+# ── Alerts ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/alerts")
+def get_alerts():
+    """
+    Live notification feed: expiring contracts, budget overruns, Icarus signal count.
+    Returns a list of alert objects for the TopBar notification bell.
+    """
+    alerts = []
+
+    # Expiring contracts
+    conn = _conn()
+    try:
+        contracts_df = get_expiring_contracts(conn, days=90)
+        df = get_full_transaction_view(conn)
+    finally:
+        conn.close()
+
+    if not contracts_df.empty:
+        for _, r in contracts_df.iterrows():
+            try:
+                days_left = (datetime.strptime(str(r["end_date"])[:10], "%Y-%m-%d").date() - date.today()).days
+            except Exception:
+                days_left = 999
+            vendor = str(r.get("vendor_name", "Unknown"))
+            if days_left < 0:
+                alerts.append({
+                    "id": f"contract-expired-{r['id']}",
+                    "type": "critical",
+                    "title": "Contract overdue",
+                    "body": f"{vendor} contract expired {abs(days_left)} days ago",
+                    "action": "clm",
+                })
+            elif days_left <= 30:
+                alerts.append({
+                    "id": f"contract-expiring-{r['id']}",
+                    "type": "critical",
+                    "title": "Contract expiring soon",
+                    "body": f"{vendor} expires in {days_left} days",
+                    "action": "clm",
+                })
+            elif days_left <= 90:
+                alerts.append({
+                    "id": f"contract-warn-{r['id']}",
+                    "type": "warn",
+                    "title": "Contract expiring",
+                    "body": f"{vendor} expires in {days_left} days",
+                    "action": "clm",
+                })
+
+    # Budget overruns — categories spending >105% of budget proxy
+    if not df.empty:
+        sc = _spend_col(df)
+        df["_spend"] = df[sc].fillna(0)
+        by_cat = df.groupby("category_mapped")["_spend"].sum()
+        for cat_name, spend in by_cat.items():
+            # Budget proxy: same heuristic as dashboard (92% of spend as "budget")
+            budget = spend * 0.92
+            if spend > budget * 1.05:
+                pct_over = round((spend / budget - 1) * 100, 1)
+                alerts.append({
+                    "id": f"budget-{cat_name}",
+                    "type": "warn",
+                    "title": "Budget overrun",
+                    "body": f"{cat_name} {pct_over}% over budget",
+                    "action": "deepdive",
+                })
+
+    # Icarus new signals (last 7 days)
+    try:
+        icarus_db = Path(__file__).parent / "clients" / CLIENT / "icarus_memory.db"
+        if icarus_db.exists():
+            iconn = sqlite3.connect(str(icarus_db))
+            iconn.row_factory = sqlite3.Row
+            cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+            try:
+                count = iconn.execute(
+                    "SELECT COUNT(*) FROM signals WHERE timestamp >= ?", (cutoff,)
+                ).fetchone()[0]
+            finally:
+                iconn.close()
+            if count > 0:
+                alerts.append({
+                    "id": "icarus-weekly",
+                    "type": "info",
+                    "title": "New Icarus signals",
+                    "body": f"{count} new market signal{'s' if count != 1 else ''} this week",
+                    "action": "icarus",
+                })
+    except Exception:
+        pass
+
+    return {"alerts": alerts}
 
 
 # ── Static frontend ────────────────────────────────────────────────────────────

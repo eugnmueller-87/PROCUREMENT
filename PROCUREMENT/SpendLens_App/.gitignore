@@ -3,6 +3,7 @@
 *.env
 .env.local
 .env.*
+!.env.example
 
 # ── Client data — NEVER commit ────────────────────────────────────────────────
 clients/
@@ -49,9 +50,8 @@ spendlens_v4.ipynb
 *.swp
 *.swo
 *~
-.claude/
-CLAUDE.md
-# (.claude/ and CLAUDE.md contain local AI session state and tool guidance)
+# .claude/ and CLAUDE.md are now committed — they contain the shared blueprint
+# (hooks, rules, agents, skills). Use .claude/settings.local.json for machine-only overrides.
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store

@@ -111,9 +111,19 @@ JSON:"""
 
 def apply_mapping(df, mapping: dict):
     """Apply column mapping to a DataFrame and return cleaned version."""
-    import pandas as pd
-    rename_map = {orig: standard for orig, standard in mapping.items() if standard}
-    df_clean = df.rename(columns=rename_map)
+    # When multiple source columns map to the same target, keep the first and drop the rest.
+    seen_targets = {}
+    deduped_mapping = {}
+    for orig, standard in mapping.items():
+        if not standard:
+            continue
+        if standard in seen_targets:
+            print(f"  ⚠ apply_mapping: dropping '{orig}' (already mapped to '{standard}' from '{seen_targets[standard]}')")
+            continue
+        seen_targets[standard] = orig
+        deduped_mapping[orig] = standard
+
+    df_clean = df.rename(columns=deduped_mapping)
 
     # Keep only mapped columns
     valid_cols = [c for c in df_clean.columns if c in STANDARD_SCHEMA]

@@ -30,7 +30,6 @@ PHILOSOPHY:
 import sqlite3
 import hashlib
 import json
-import os
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -88,7 +87,7 @@ def init_database(client_name: str = "default") -> None:
     """
     conn = get_connection(client_name)
 
-    print(f"\n── Initializing Database ───────────────────────────────")
+    print("\n── Initializing Database ───────────────────────────────")
     print(f"  📁 Path: {get_db_path(client_name)}")
 
     conn.executescript("""
@@ -358,8 +357,8 @@ def init_database(client_name: str = "default") -> None:
     conn.commit()
     conn.close()
 
-    print(f"  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches, supplier_profiles, contracts")
-    print(f"── Database ready ✅ ────────────────────────────────────\n")
+    print("  ✅ Tables created: uploads, transactions_raw, transactions_enriched, vendors, matches, supplier_profiles, contracts")
+    print("── Database ready ✅ ────────────────────────────────────\n")
 
 
 # ── ROW HASHING ────────────────────────────────────────────────────────────────
@@ -369,12 +368,13 @@ def compute_row_hash(row: dict) -> str:
     Generate a unique hash for a transaction row.
     Used to detect and prevent duplicate inserts across uploads.
 
-    Hashes: supplier + spend + date + description + po_number
-    If these 5 fields match an existing row → it's a duplicate, skip it.
+    Hashes: supplier + spend + currency + date + description + po_number
+    If these 6 fields match an existing row → it's a duplicate, skip it.
     """
     key_fields = [
         str(row.get("supplier", "") or ""),
         str(row.get("spend", "") or ""),
+        str(row.get("currency", "") or ""),
         str(row.get("date", "") or ""),
         str(row.get("description", "") or ""),
         str(row.get("po_number", "") or ""),
@@ -642,7 +642,7 @@ def bulk_upsert_vendors(conn: sqlite3.Connection,
             oc_jurisdiction=result.get("oc_jurisdiction"),
         )
 
-    print(f"  ✅ Vendor knowledge base updated")
+    print("  ✅ Vendor knowledge base updated")
 
 
 # ── QUERY HELPERS ─────────────────────────────────────────────────────────────
@@ -868,4 +868,4 @@ if __name__ == "__main__":
     print(df_re.to_string(index=False))
 
     conn.close()
-    print(f"\n✅ Database test complete — open clients/default/spendlens.db in VS Code to browse")
+    print("\n✅ Database test complete — open clients/default/spendlens.db in VS Code to browse")
