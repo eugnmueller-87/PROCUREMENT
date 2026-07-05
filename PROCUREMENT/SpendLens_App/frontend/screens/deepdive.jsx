@@ -4,6 +4,7 @@ const { useState: useS, useEffect: useE } = React;
 function DeepDive({ openDrawer, api }) {
   const [data, setData] = useS(null);
   const [loading, setLoading] = useS(true);
+  const { tip, show, hide } = useTip();
 
   useE(() => {
     fetch(`${api}/api/dashboard`)
@@ -46,9 +47,21 @@ function DeepDive({ openDrawer, api }) {
               const fromPct = (d.from / maxV) * 100;
               const toPct   = (d.to   / maxV) * 100;
               const positive = d.growth >= 0;
+              const y0 = trendYears?.[0], y1 = trendYears?.[trendYears.length - 1];
+              const onMove = (e) => show(e, (
+                <div>
+                  <div className="chart-tip-head">{d.name}</div>
+                  <TipRow color="var(--primary)" label={`${y0}`} value={fmtM(d.from)} />
+                  <TipRow color="var(--info)" label={`${y1}`} value={fmtM(d.to)} />
+                  <TipRow color={positive ? "var(--good)" : "var(--bad)"} label="Growth"
+                    value={`${positive ? "+" : ""}${d.growth}%`} bold />
+                </div>
+              ));
               return (
-                <div key={d.name} style={{ display: "grid", gridTemplateColumns: "140px 1fr 72px", gap: 10, alignItems: "center", fontSize: 12 }}>
-                  <div style={{ color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                <div key={d.name} onClick={() => drillIn(d)}
+                  style={{ display: "grid", gridTemplateColumns: "160px 1fr 72px", gap: 10, alignItems: "center", fontSize: 12, cursor: "pointer", borderRadius: 6 }}
+                  onMouseMove={onMove} onMouseLeave={hide}>
+                  <div style={{ color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.name}>{d.name}</div>
                   <div style={{ position: "relative", height: 20, background: "var(--bg-sunk)", borderRadius: 4 }}>
                     <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${fromPct}%`, background: "var(--primary)", borderRadius: 4, opacity: 0.6 }} />
                     <div style={{ position: "absolute", left: `${fromPct}%`, top: 0, bottom: 0, width: `${Math.max(toPct - fromPct, 0)}%`, background: "var(--info)", borderRadius: "0 4px 4px 0" }} />
@@ -60,6 +73,7 @@ function DeepDive({ openDrawer, api }) {
               );
             })}
           </div>
+          <ChartTip tip={tip} />
         </div>
 
         <div className="card">

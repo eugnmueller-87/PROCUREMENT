@@ -13,6 +13,47 @@ const fmtK = (n) => {
 };
 const fmtM = (n) => n == null ? "" : "€" + n.toFixed(1) + "M";
 
+// ── Shared hover tooltip ─────────────────────────────────────────────────────────
+// A single floating tooltip driven by a hook. Charts call show(evt, node) on
+// mouse move and hide() on leave; the tooltip follows the cursor and flips to
+// stay on-screen. `node` is any JSX (rows of label + value).
+function useTip() {
+  const [tip, setTip] = React.useState(null); // { x, y, node }
+  const show = React.useCallback((e, node) => {
+    setTip({ x: e.clientX, y: e.clientY, node });
+  }, []);
+  const hide = React.useCallback(() => setTip(null), []);
+  return { tip, show, hide };
+}
+
+function ChartTip({ tip }) {
+  if (!tip) return null;
+  // Flip left/up when near the right/bottom viewport edges.
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const flipX = tip.x > vw - 220;
+  const flipY = tip.y > vh - 160;
+  const style = {
+    position: "fixed",
+    left: flipX ? tip.x - 14 : tip.x + 14,
+    top: flipY ? tip.y - 14 : tip.y + 14,
+    transform: `translate(${flipX ? "-100%" : "0"}, ${flipY ? "-100%" : "0"})`,
+    zIndex: 80,
+    pointerEvents: "none",
+  };
+  return <div className="chart-tip" style={style}>{tip.node}</div>;
+}
+
+// One row inside a tooltip: swatch + label on the left, value on the right.
+function TipRow({ color, label, value, bold }) {
+  return (
+    <div className="chart-tip-row">
+      {color && <span className="chart-tip-dot" style={{ background: color }} />}
+      <span className="chart-tip-label" style={bold ? { fontWeight: 600, color: "var(--ink)" } : null}>{label}</span>
+      <span className="chart-tip-val num" style={bold ? { fontWeight: 600 } : null}>{value}</span>
+    </div>
+  );
+}
+
 // ── Sparkline ──────────────────────────────────────────────────────────────────
 function Sparkline({ data, color = "var(--primary)", height = 30 }) {
   if (!data || !data.length) return null;
@@ -38,6 +79,10 @@ function Sparkline({ data, color = "var(--primary)", height = 30 }) {
 function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
   const w = 800, h = height - 30;
   const n = xLabels.length;
+  const wrapRef = React.useRef(null);
+  const [hoverI, setHoverI] = React.useState(-1);
+  const { tip, show, hide } = useTip();
+
   const stacks = xLabels.map((_, i) => {
     let acc = 0;
     return series.map(s => { acc += (s.data[i] || 0); return acc; });
@@ -51,19 +96,44 @@ function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
     "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)",
     "var(--chart-9)", "var(--chart-10)", "var(--chart-11)",
   ];
+  const colorOf = (si) => COLORS[si % COLORS.length];
 
   const polys = series.map((s, si) => {
     const top = xLabels.map((_, i) => [x(i), y(stacks[i][si])]);
     const bot = xLabels.map((_, i) => [x(i), y(si === 0 ? 0 : stacks[i][si - 1])]).reverse();
     const pts = [...top, ...bot].map(p => p.join(",")).join(" ");
-    return { id: s.id || si, color: COLORS[si % COLORS.length], pts, name: s.name };
+    return { id: s.id || si, color: colorOf(si), pts, name: s.name };
   });
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => ({ v: maxY * t, y: h - t * h }));
   const hlIdx = highlightX ? xLabels.indexOf(highlightX) : -1;
+  const activeIdx = hoverI >= 0 ? hoverI : hlIdx;
+
+  // Map a mouse position over the plot to the nearest year index.
+  const onMove = (e) => {
+    const box = wrapRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const frac = (e.clientX - box.left) / box.width;
+    const i = Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1))));
+    setHoverI(i);
+    const yearTotal = stacks[i][series.length - 1];
+    // Show categories present at this year, largest contribution first.
+    const rows = series
+      .map((s, si) => ({ name: s.name, v: s.data[i] || 0, color: colorOf(si) }))
+      .filter(r => r.v > 0)
+      .sort((a, b) => b.v - a.v);
+    show(e, (
+      <div>
+        <div className="chart-tip-head">{xLabels[i]} · total {fmtM(yearTotal)}</div>
+        {rows.map(r => <TipRow key={r.name} color={r.color} label={r.name} value={fmtM(r.v)} />)}
+      </div>
+    ));
+  };
+  const onLeave = () => { setHoverI(-1); hide(); };
 
   return (
-    <div style={{ width: "100%", overflow: "visible" }}>
+    <div ref={wrapRef} style={{ width: "100%", overflow: "visible", position: "relative", cursor: "crosshair" }}
+      onMouseMove={onMove} onMouseLeave={onLeave}>
       <svg viewBox={`-40 -8 ${w + 120} ${h + 36}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
         {ticks.map((t, i) => (
           <g key={i}>
@@ -73,24 +143,32 @@ function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
             </text>
           </g>
         ))}
-        {polys.map(p => (
-          <polygon key={p.id} points={p.pts} fill={p.color} opacity="0.85" />
+        {polys.map((p, si) => (
+          <polygon key={p.id} points={p.pts} fill={p.color}
+            opacity={hoverI >= 0 ? 0.55 : 0.85} style={{ transition: "opacity 120ms" }} />
         ))}
-        {/* Year highlight marker */}
-        {hlIdx >= 0 && (
-          <g>
-            <line x1={x(hlIdx)} y1={0} x2={x(hlIdx)} y2={h} stroke="var(--ink)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5" />
-            <rect x={x(hlIdx) - 18} y={-8} width={36} height={14} fill="var(--primary)" rx="3" />
-            <text x={x(hlIdx)} y={1} fontSize="9" fill="var(--primary-ink)" textAnchor="middle" fontFamily="Geist Mono" fontWeight="600">{highlightX}</text>
+        {/* Crosshair + emphasized points at the hovered/selected year */}
+        {activeIdx >= 0 && (
+          <g style={{ pointerEvents: "none" }}>
+            <line x1={x(activeIdx)} y1={0} x2={x(activeIdx)} y2={h} stroke="var(--ink)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5" />
+            {hoverI >= 0 && series.map((s, si) => (
+              (s.data[activeIdx] || 0) > 0
+                ? <circle key={si} cx={x(activeIdx)} cy={y(stacks[activeIdx][si])} r="2.6"
+                    fill={colorOf(si)} stroke="var(--card)" strokeWidth="1" />
+                : null
+            ))}
+            <rect x={x(activeIdx) - 18} y={-8} width={36} height={14} fill="var(--primary)" rx="3" />
+            <text x={x(activeIdx)} y={1} fontSize="9" fill="var(--primary-ink)" textAnchor="middle" fontFamily="Geist Mono" fontWeight="600">{xLabels[activeIdx]}</text>
           </g>
         )}
         {xLabels.map((lbl, i) => (
           <text key={i} x={x(i)} y={h + 18} fontSize="10.5"
-            fill={lbl === highlightX ? "var(--primary)" : "var(--ink-3)"}
-            fontWeight={lbl === highlightX ? "700" : "400"}
+            fill={i === activeIdx ? "var(--primary)" : "var(--ink-3)"}
+            fontWeight={i === activeIdx ? "700" : "400"}
             textAnchor="middle" fontFamily="Geist Mono">{lbl}</text>
         ))}
       </svg>
+      <ChartTip tip={tip} />
     </div>
   );
 }
@@ -98,6 +176,7 @@ function StackedArea({ series, xLabels, height = 280, highlightX = null }) {
 // ── Horizontal Bar (spend vs budget) ──────────────────────────────────────────
 function SpendVsBudget({ data, height = 320, absMax = null }) {
   const maxV = absMax || Math.max(...data.map(d => Math.max(d.spend || 0, d.budget || 0)), 1);
+  const { tip, show, hide } = useTip();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
       {data.map(d => {
@@ -105,9 +184,20 @@ function SpendVsBudget({ data, height = 320, absMax = null }) {
         const spendPct = (d.spend / maxV) * 100;
         const budgetPct = (d.budget / maxV) * 100;
         const overPct = over ? ((d.spend - d.budget) / maxV) * 100 : 0;
+        const variance = d.budget ? ((d.spend - d.budget) / d.budget * 100) : 0;
+        const onMove = (e) => show(e, (
+          <div>
+            <div className="chart-tip-head">{d.name}</div>
+            <TipRow color="var(--primary)" label="Spend" value={fmtM(d.spend)} />
+            <TipRow color="var(--ink-3)" label="Budget" value={fmtM(d.budget)} />
+            <TipRow color={over ? "var(--bad)" : "var(--good)"} label="Variance"
+              value={`${over ? "+" : ""}${variance.toFixed(1)}%`} bold />
+          </div>
+        ));
         return (
-          <div key={d.name} style={{ display: "grid", gridTemplateColumns: "150px 1fr 70px", gap: 12, alignItems: "center", fontSize: 12 }}>
-            <div style={{ color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+          <div key={d.name} style={{ display: "grid", gridTemplateColumns: "150px 1fr 70px", gap: 12, alignItems: "center", fontSize: 12, cursor: "default" }}
+            onMouseMove={onMove} onMouseLeave={hide}>
+            <div style={{ color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.name}>{d.name}</div>
             <div style={{ position: "relative", height: 22, background: "var(--bg-sunk)", borderRadius: 4 }}>
               <div style={{ position: "absolute", left: `${budgetPct}%`, top: -2, bottom: -2, width: 2, background: "var(--ink-3)", opacity: 0.4 }} />
               <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${spendPct - overPct}%`, background: "var(--primary)", borderRadius: "4px 0 0 4px" }} />
@@ -117,6 +207,7 @@ function SpendVsBudget({ data, height = 320, absMax = null }) {
           </div>
         );
       })}
+      <ChartTip tip={tip} />
     </div>
   );
 }
@@ -194,6 +285,8 @@ function RiskBubble({ data, height = 320, xLabel = "Spend (€M)" }) {
 // ── Treemap ────────────────────────────────────────────────────────────────────
 function Treemap({ items, height = 380, onPick }) {
   const colorFor = (r) => ({ critical: "var(--bad)", high: "var(--warn)", medium: "var(--info)", low: "var(--good)" }[r] || "var(--ink-3)");
+  const { tip, show, hide } = useTip();
+  const [hover, setHover] = React.useState(null);
   const sorted = [...items].sort((a, b) => b.value - a.value);
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
   const W = 1000, H = height;
@@ -222,15 +315,35 @@ function Treemap({ items, height = 380, onPick }) {
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
-      {out.map((r, i) => (
-        <g key={i} style={{ cursor: "pointer" }} onClick={() => onPick && onPick(r)}>
-          <rect x={r.x + 2} y={r.y + 2} width={r.w - 4} height={r.h - 4} fill={colorFor(r.risk)} opacity="0.85" rx="3" />
-          <text x={r.x + 12} y={r.y + 22} fontSize="13" fill="var(--card)" fontWeight="600">{r.name}</text>
-          <text x={r.x + 12} y={r.y + 38} fontSize="11" fill="var(--card)" opacity="0.85" fontFamily="Geist Mono">€{r.value}M</text>
-        </g>
-      ))}
-    </svg>
+    <div style={{ width: "100%", position: "relative" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
+        {out.map((r, i) => {
+          const onMove = (e) => {
+            setHover(i);
+            show(e, (
+              <div>
+                <div className="chart-tip-head">{r.name}</div>
+                <TipRow color={colorFor(r.risk)} label="Spend" value={`€${r.value}M`} bold />
+                <TipRow label="Share" value={`${(r.value / total * 100).toFixed(1)}%`} />
+                <TipRow label="Risk" value={r.risk} />
+              </div>
+            ));
+          };
+          return (
+            <g key={i} style={{ cursor: "pointer" }}
+              onClick={() => onPick && onPick(r)}
+              onMouseMove={onMove}
+              onMouseLeave={() => { setHover(null); hide(); }}>
+              <rect x={r.x + 2} y={r.y + 2} width={r.w - 4} height={r.h - 4} fill={colorFor(r.risk)}
+                opacity={hover === i ? 1 : 0.85} rx="3" style={{ transition: "opacity 120ms" }} />
+              <text x={r.x + 12} y={r.y + 22} fontSize="13" fill="var(--card)" fontWeight="600" style={{ pointerEvents: "none" }}>{r.name}</text>
+              <text x={r.x + 12} y={r.y + 38} fontSize="11" fill="var(--card)" opacity="0.85" fontFamily="Geist Mono" style={{ pointerEvents: "none" }}>€{r.value}M</text>
+            </g>
+          );
+        })}
+      </svg>
+      <ChartTip tip={tip} />
+    </div>
   );
 }
 
@@ -311,4 +424,4 @@ function Waterfall({ data, height = 260 }) {
   );
 }
 
-Object.assign(window, { Sparkline, StackedArea, SpendVsBudget, RiskBubble, Treemap, Donut, RiskArc, Waterfall, fmtK, fmtM, riskColor, riskClass, RISK_COLOR, RISK_CLASS });
+Object.assign(window, { Sparkline, StackedArea, SpendVsBudget, RiskBubble, Treemap, Donut, RiskArc, Waterfall, fmtK, fmtM, riskColor, riskClass, RISK_COLOR, RISK_CLASS, useTip, ChartTip, TipRow });
