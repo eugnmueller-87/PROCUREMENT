@@ -4,7 +4,7 @@
 ![Live](https://img.shields.io/badge/Live-Railway-brightgreen)
 ![Stack](https://img.shields.io/badge/Stack-React_+_FastAPI_+_SQLite-blue)
 ![AI](https://img.shields.io/badge/AI-Claude_API-orange)
-![Data](https://img.shields.io/badge/Spend_Analytics-590%2B_Suppliers-purple)
+![Hermes](https://img.shields.io/badge/Hermes_watchlist-56_suppliers_%C2%B7_8_categories-purple)
 ![License](https://img.shields.io/badge/License-Private-lightgrey)
 
 
@@ -93,7 +93,7 @@ Meanwhile:
 - Per-signal: relevance chip (Critical/High/Medium), source, headline, summary, recommended action
 - Click signal → full signal drawer with AI context
 - **Run Scan** — triggers RSS scan across 9 sources + Hermes market intelligence injection
-- **Hermes integration** — signals from 590+ tracked suppliers fed in automatically
+- **Hermes integration** — signals from the 56 suppliers on the Hermes watchlist fed in automatically
 - Time filter: Today / 7 days / 30 days / All time
 - Full-text search across signals
 - Demo signals shown when database is empty (no blank state)
@@ -194,7 +194,7 @@ SpendLens is the data platform at the centre of a four-agent system. It provides
                                               ▼
                                   ┌──────────────────────┐
                                   │   HERMES (Intel)     │
-                                  │  ~590 suppliers      │
+                                  │  56 suppliers        │
                                   │  Redis + Vector      │
                                   │  RSS · EDGAR · Jobs  │
                                   └──────────────────────┘
@@ -363,7 +363,7 @@ uvicorn api:app --reload --port 8000
 | Spend classification — 5-stage AI pipeline | ✅ Live | 11 categories, cached, ~$0.05/1000 vendors |
 | Dashboard — year filter, YoY chart, risk matrix | ✅ Live | All charts update on year selection |
 | Deep Dive — growth, treemap, spend share, drill-in | ✅ Live | Category drawer with trend mini-chart |
-| Hermes market intelligence | ✅ Live | 590+ suppliers, 17 categories, Upstash Redis |
+| Hermes market intelligence | ✅ Live | 56 suppliers, 8 categories, Upstash Redis |
 | Savings Tracker — budget vs. actual, variance | 🔴 High priority | CFOs expect this |
 
 ### Layer 3 · Sourcing & Supplier Management
@@ -471,7 +471,7 @@ SpendLens is the data platform at the centre of a four-agent system:
 | **Icarus** | Personal AI OS — user interface | Queries `/api/suppliers/lookup/{name}` for dual-check answers |
 | **SpendLens** | Spend analytics, vendor records, approval workflows | Hosts vendor DB; calls Hades at onboarding; exposes lookup API |
 | **Hades** | Supplier due diligence — autonomous research, risk scoring | Called by SpendLens; writes risk fields back to vendor record |
-| **Hermes** | Market intelligence — 590+ suppliers, continuous crawling | Signals injected into SpendLens Icarus feed; shares Redis with Hades |
+| **Hermes** | Market intelligence — 56 suppliers, crawls triggered on demand | Signals injected into SpendLens Icarus feed; shares Redis with Hades |
 
 ---
 
