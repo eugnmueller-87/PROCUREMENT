@@ -1,7 +1,7 @@
 <img src="docs/logo.svg" width="48" align="left" style="margin-right:12px;">
 # SpendLens
 
-![Live](https://img.shields.io/badge/Live-Railway-brightgreen)
+![Status](https://img.shields.io/badge/status-paused_since_Nov_2026-lightgrey)
 ![Stack](https://img.shields.io/badge/Stack-React_+_FastAPI_+_SQLite-blue)
 ![AI](https://img.shields.io/badge/AI-Claude_API-orange)
 ![Hermes](https://img.shields.io/badge/Hermes_watchlist-56_suppliers_%C2%B7_8_categories-purple)
@@ -11,7 +11,7 @@
 # SpendLens
 ### AI-Powered Procurement Intelligence
 
-**Status:** Live on Railway (URL available on request)
+**Status:** the Railway deployment is paused since November 2026.
 
 > *Procurement has been running on static reports and manual analysis for decades. SpendLens changes that.*
 
@@ -428,7 +428,7 @@ uvicorn api:app --reload --port 8000
 
 | Component | Status |
 |-----------|--------|
-| FastAPI backend + React SPA | ✅ Live on Railway |
+| FastAPI backend + React SPA | ⏸ Paused since November 2026 |
 | AI column mapper | ✅ Complete |
 | Data cleanup engine | ✅ Complete |
 | Category mapper (chunked + cached) | ✅ Complete |

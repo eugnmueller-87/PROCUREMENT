@@ -1,7 +1,7 @@
 # SpendLens
 ### AI-Powered Procurement Intelligence
 
-![Live](https://img.shields.io/badge/live-Railway_%28URL_on_request%29-2ea44f?logo=railway&logoColor=white)
+![Status](https://img.shields.io/badge/status-paused_since_Nov_2026-lightgrey)
 ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
